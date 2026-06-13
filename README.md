@@ -1,138 +1,121 @@
-# Plantilla SDD — Spec-Driven Development (OpenSpec)
+# 📊 Monitoreo Cloud — n8n + Grafana + AWS Free Tier
 
-Plantilla **reutilizable y agnóstica de tecnología** para arrancar proyectos con un flujo de
-**desarrollo guiado por especificaciones (SDD)** sobre [OpenSpec](https://github.com/Fission-AI/OpenSpec).
-Sirve para Python, PHP, React, n8n, SQL, CLIs, etc. Viene preparada para trabajar con **Claude Code** y
-**Gemini CLI**.
+> Pipeline de observabilidad **serverless-friendly** que recolecta métricas de AWS CloudWatch,
+> las orquesta con **n8n** (self-hosted en EC2) y las visualiza en **Grafana Cloud** —
+> 100% sobre planes gratuitos. Proyecto de portafolio.
+>
+> **Estado:** MVP en desarrollo (Fases 1–4). · Alcance funcional: ver
+> [`openspec/changes/monitoreo-cloud-mvp/`](openspec/changes/monitoreo-cloud-mvp/).
 
-La documentación, los comentarios y los artefactos se redactan en **español**.
+## 🎯 Qué resuelve
 
-## 🧭 ¿Qué es SDD / OpenSpec?
+- Monitoreo en tiempo real de infraestructura AWS **sin costo** (AWS Free Tier + Grafana Cloud free).
+- Recolección **automatizada** de métricas con workflows low-code (n8n), sin scripts ad-hoc.
+- Dashboards operativos y alertas, demostrando observabilidad y cloud automation.
 
-La especificación es la fuente de verdad. Cada cambio recorre artefactos antes de codificar:
+## 🏗️ Arquitectura
 
 ```
-proposal  →  specs  →  design  →  tasks  →  (apply / implementación)  →  archive
-   ¿por qué?   ¿qué?     ¿cómo?    ¿pasos?       código + verificación      cierre
+┌───────────────────────────────────────────────────────────────┐
+│  AWS CloudWatch  — métricas (CPU, memoria, Lambda) y logs       │
+└───────────────────────────────────────────────────────────────┘
+                    │  pull cada N min (rol IAM, solo lectura)
+                    ▼
+┌───────────────────────────────────────────────────────────────┐
+│  n8n  — EC2 t2.micro (Amazon Linux 2023, Docker Compose)        │
+│  Schedule → CloudWatch → transforma (Prometheus) → HTTP push    │
+└───────────────────────────────────────────────────────────────┘
+                    │  remote write (HTTPS + token)
+                    ▼
+┌───────────────────────────────────────────────────────────────┐
+│  Grafana Cloud  — dashboards en tiempo real + alertas           │
+└───────────────────────────────────────────────────────────────┘
 ```
+
+Detalle de decisiones técnicas: [`openspec/changes/monitoreo-cloud-mvp/design.md`](openspec/changes/monitoreo-cloud-mvp/design.md).
+
+## 🛠️ Tecnologías
+
+| Componente | Tecnología | Plan gratuito |
+|---|---|---|
+| Cómputo | AWS EC2 `t2.micro` (Amazon Linux 2023) | 750 hrs/mes |
+| Métricas / logs | AWS CloudWatch | 10 métricas custom · 5 GB logs |
+| Orquestación / ETL | n8n (Docker) | self-hosted |
+| Visualización | Grafana Cloud | free (3 usuarios · 10k series) |
+| Despliegue | AWS CLI + bash · Docker Compose | — |
+| Costo (guardarraíl) | AWS Budgets | alerta a $1 USD |
+
+## 📦 Requisitos
+
+- AWS CLI v2 autenticado (`aws sts get-caller-identity`), región `us-east-2`.
+- `bash` y `curl` en la máquina del operador.
+- Docker / Docker Compose (se instalan en la EC2 vía user-data).
+- Cuenta gratuita de Grafana Cloud (alta manual).
+
+## 🚀 Configuración (quickstart)
+
+```bash
+git clone https://github.com/<tu-usuario>/monitoreo-cloud.git
+cd monitoreo-cloud/scripts/aws
+./budget.sh tu-correo@ejemplo.com 1   # guardarraíl de costo
+./provision.sh                        # EC2 + SG + rol IAM + key pair (idempotente)
+./status.sh                           # estado y costos
+```
+
+Despliegue completo (n8n + Grafana + pipeline): **[`docs/DEPLOY.md`](docs/DEPLOY.md)**.
+
+## ⚙️ Scripts
+
+| Script | Para qué |
+|---|---|
+| `scripts/aws/provision.sh` | Provisiona EC2 t2.micro, security group, rol IAM y key pair (idempotente) |
+| `scripts/aws/budget.sh` | Crea budget de $1 USD con alerta por correo |
+| `scripts/aws/status.sh` | Reporta recursos y costo del mes |
+| `scripts/aws/teardown.sh` | Elimina todos los recursos por tag (`--yes` para no confirmar) |
 
 ## 📁 Estructura
 
 ```
 .
-├── README.md                      # este archivo
-├── AGENTS.md / CLAUDE.md / GEMINI.md  # contexto por asistente; importan docs/base-standards.md
-├── openspec/
-│   ├── config.yaml                # contexto + reglas del proyecto (RELLENAR placeholders)
-│   ├── project.md                 # contexto del proyecto (RELLENAR)
-│   ├── schemas/spec-driven/       # schema + plantillas de artefactos (proposal/spec/design/tasks)
-│   ├── specs/                     # capabilities vigentes (vacío al inicio)
-│   └── changes/archive/           # cambios archivados (vacío al inicio)
-├── docs/
-│   ├── base-standards.md          # principios base, idioma, skills, planificación, reglas OpenSpec
-│   └── documentation-standards.md # estándares de documentación
-├── ai-specs/                      # FUENTE CANÓNICA reutilizable
-│   ├── agents/                    # agentes (backend/frontend genéricos, product-strategy)
-│   ├── skills/                    # skills (genéricas)
-│   └── scripts/
-├── .claude/                       # Claude Code: commands (/opsx:*), skills, agents, rules, scripts
-└── .gemini/                       # Gemini CLI: commands (opsx/*.toml), skills, agents, rules
+├── infra/                  # docker-compose.yml de n8n
+├── scripts/aws/            # provisión/teardown/status/budget (AWS CLI)
+├── n8n/workflows/          # workflows exportados (JSON, sin credenciales)
+├── grafana/                # dashboards y alertas como código
+├── docs/                   # estándares, runbook de despliegue, fuente del proyecto
+├── openspec/               # especificaciones SDD (proposal/specs/design/tasks)
+└── .env.example            # plantilla de variables (el .env real no se versiona)
 ```
 
-## 🚀 Cómo usarla en un proyecto nuevo
+## 🔐 Seguridad
 
-1. **Copia** el contenido de esta carpeta en la raíz del proyecto nuevo.
-2. **Rellena** los placeholders `<...>` en:
-   - `openspec/config.yaml` → stack, arquitectura, dominio.
-   - `openspec/project.md` → descripción, comandos, convenciones.
-3. **Agrega** los `docs/<area>-standards.md` que apliquen (p. ej. `backend-standards.md`,
-   `frontend-standards.md`, `sql-standards.md`, `n8n-standards.md`) y enlázalos desde `config.yaml`.
-4. **Instala** la CLI de OpenSpec (requerida por los comandos): ver su documentación oficial.
-5. **Inicializa git** si el proyecto lo usará (esta plantilla no incluye repositorio).
-6. **Escribe el README del proyecto** siguiendo la estructura de alta calidad de abajo.
+- Secretos **nunca** en el repo: `.env`, `*.pem`, tokens y credenciales están en `.gitignore`.
+- n8n usa el **rol IAM de la instancia** (solo lectura de CloudWatch), sin llaves estáticas.
+- Security group de mínimo privilegio (SSH y n8n solo desde la IP del operador) + basic auth en n8n.
 
-## 📝 README de tu proyecto (estructura de alta calidad)
+## 📚 Documentación
 
-El README del proyecto es la **puerta de entrada**: que un nuevo integrante entienda y arranque sin contexto extra. Estructura recomendada (headers con emoji para escaneabilidad):
+- [`docs/DEPLOY.md`](docs/DEPLOY.md) — runbook de despliegue paso a paso.
+- [`docs/n8n-aws-standards.md`](docs/n8n-aws-standards.md) — estándares de n8n, AWS CLI, Free Tier y secretos.
+- [`openspec/`](openspec/) — especificación viva (SDD / OpenSpec).
 
-```markdown
-# <Proyecto> — <una línea de qué es>
-> Estado del proyecto + enlace al alcance funcional.
+## 🔄 Cómo contribuir (SDD)
 
-## 🎯 Qué resuelve        # problema + valor (bullets), o actores y capacidades
-## 🏗️ Arquitectura        # diagrama ASCII de capas (ver ejemplo abajo) + enlace a ARCHITECTURE.md
-## 🛠️ Tecnologías         # stack real
-## 📦 Requisitos           # versiones (Node, Docker…), con .nvmrc
-## 🚀 Configuración        # quickstart (clonar → instalar → levantar → correr)
-## ⚙️ Scripts              # tabla de npm/make scripts
-## 🧪 Pruebas y CI         # cómo verificar + qué corre la CI
-## 📁 Estructura           # árbol de carpetas comentado
-## 🔗 API                  # cómo se expone/genera la API (REST/OpenAPI/RPC…)
-## 📚 Documentación        # índice de docs (apuntar a DOCS_INVENTORY como canónico)
-## 🔄 Cómo contribuir (SDD)  # flujo en UNA sección: rama → spec (templates) → pruebas → verificación → PR a SDD → archive
+Flujo guiado por especificaciones (OpenSpec): rama `feature/*` → `proposal` → `specs` → `design`
+→ `tasks` → implementación + verificación → PR → `archive`. Ver
+[`docs/base-standards.md`](docs/base-standards.md).
+
+## 🧠 Roadmap
+
+- **Fase 5 (futuro):** capa AI con OpenAI en n8n para detección de anomalías y alertas inteligentes.
+
+## 💼 Para CV / LinkedIn
+
+> Diseñé e implementé un sistema de monitoreo en tiempo real sobre AWS Free Tier, usando n8n como
+> orquestador de pipelines de datos y Grafana Cloud para visualización. Integra métricas de CloudWatch,
+> automatiza la recolección con workflows low-code y genera dashboards y alertas operativas —
+> demostrando observabilidad, cloud automation y arquitectura serverless, con guardarraíles de costo
+> (infra como código idempotente y teardown reproducible).
+
 ## 📄 Licencia
-```
 
-**Ejemplo de diagrama de arquitectura (ASCII)** — *muestra de un proyecto BaaS/Supabase; **adáptalo a tu stack** (capas DDD, microservicios, etc.):*
-
-```
-┌──────────────────────────────────────────────────────────────────┐
-│  CLIENTE — navegador / móvil                                       │
-│  React · Vite · Tailwind · supabase-js                             │
-└──────────────────────────────────────────────────────────────────┘
-                    │  HTTPS  (REST · RPC · Auth · Realtime WS)
-                    ▼
-┌──────────────────────────────────────────────────────────────────┐
-│  BACKEND (BaaS — Supabase)                                         │
-│  ┌──────────┐ ┌─────────────┐ ┌──────────┐ ┌────────────────────┐ │
-│  │  Auth    │ │  PostgREST  │ │ Realtime │ │  Edge Functions     │ │
-│  │ (GoTrue) │ │  REST + RPC │ │  (WS)    │ │  (Deno)             │ │
-│  └──────────┘ └─────────────┘ └──────────┘ └────────────────────┘ │
-├──────────────────────────────────────────────────────────────────┤
-│  PostgreSQL  ·  RLS multi-tenant  ·  RPC (SECURITY DEFINER)  ·     │
-│  migraciones inmutables (fuente del esquema)                       │
-└──────────────────────────────────────────────────────────────────┘
-```
-
-> Alternativa por capas (DDD / backend tradicional): Presentación → Aplicación → Dominio → Infraestructura.
-
-> Reglas de oro: **una fuente canónica por dato** (los demás enlazan, no copian); **no hardcodear conteos** que se desfasan (test counts → la CI es la fuente de verdad); mantener un `docs/DOCS_INVENTORY.md` como índice maestro.
-
-## ⚙️ Comandos del flujo
-
-Mismos pasos en ambos agentes — en **Claude Code** como `/opsx:<x>`, en **Gemini CLI** como `opsx:<x>`:
-
-| Comando      | Para qué |
-|--------------|----------|
-| `new`        | Iniciar un cambio nuevo (proposal → specs → design → tasks) |
-| `ff`         | Fast-forward: generar todos los artefactos de un tirón |
-| `continue`   | Continuar un cambio existente |
-| `explore`    | Explorar/entender antes de proponer |
-| `apply`      | Implementar las tareas del cambio |
-| `verify`     | Verificar el cambio contra sus artefactos |
-| `sync`       | Sincronizar specs |
-| `archive`    | Archivar un cambio completado |
-| `bulk-archive` | Archivar varios cambios |
-| `onboard`    | Recorrido guiado por el flujo OpenSpec |
-
-> Los comandos Gemini se generan desde los de Claude (`.gemini/commands/opsx/*.toml`). El argumento del
-> usuario llega como `{{args}}`.
-
-## 🤖 Agentes y skills
-
-- **Fuente canónica**: `ai-specs/` (agentes y skills). `.claude/` y `.gemini/` la referencian.
-- En Windows los symlinks suelen no sobrevivir a la copia; hay copias/punteros reales. Si necesitas
-  materializar referencias, usa la skill `sync-agent-symlinks`.
-- Agentes incluidos: `backend-developer` y `frontend-developer` (genéricos, ajústalos al stack) y
-  `product-strategy-analyst`.
-
-## ✅ Pasos obligatorios en cada cambio
-
-Definidos en `.claude/rules/openspec-tasks-mandatory-steps.md` (agnósticos de tecnología):
-crear feature branch → revisar/actualizar pruebas → ejecutar pruebas + reporte → **verificación manual
-según el tipo de proyecto (el agente la ejecuta)** → actualizar documentación.
-
-## 🎛️ Personalización
-
-- **Idioma**: ajusta `docs/base-standards.md` §2 si tu proyecto requiere otro idioma.
-- **Stack**: todo lo específico vive en `docs/*-standards.md` + `openspec/config.yaml`; el resto es genérico.
+MIT.

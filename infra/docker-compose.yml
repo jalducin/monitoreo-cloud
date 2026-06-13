@@ -1,0 +1,38 @@
+# n8n self-hosted para Monitoreo Cloud (EC2 t2.micro, Amazon Linux 2023).
+# Secretos vía .env del host (NO versionado). Ver .env.example en la raíz del repo.
+# Estándares: docs/n8n-aws-standards.md §4-§5.
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:1.118.0   # versión fijada (no 'latest')
+    container_name: n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      # --- Autenticación básica (obligatoria) ---
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD}
+      # --- Host / red ---
+      - N8N_HOST=${N8N_HOST}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://${N8N_HOST}:5678/
+      - GENERIC_TIMEZONE=America/Mexico_City
+      # --- Clave de cifrado de credenciales (persiste en el volumen) ---
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      # --- Región AWS para nodos que usen el rol IAM de la instancia ---
+      - AWS_REGION=${AWS_REGION:-us-east-2}
+      # --- Endpoint/credenciales de Grafana Cloud se configuran en el credential store de n8n,
+      #     NO aquí (ver docs/DEPLOY.md). ---
+    volumes:
+      - n8n_data:/home/node/.n8n
+    # Límites acordes a t2.micro (1 vCPU / 1 GB). Evita OOM dejando margen al host.
+    deploy:
+      resources:
+        limits:
+          memory: 700M
+
+volumes:
+  n8n_data:
+    driver: local
