@@ -29,6 +29,9 @@ services:
       - DB_POSTGRESDB_USER=${DB_POSTGRESDB_USER}
       - DB_POSTGRESDB_PASSWORD=${DB_POSTGRESDB_PASSWORD}
       - DB_POSTGRESDB_SSL_ENABLED=true
+      # RDS fuerza SSL (rds.force_ssl=1); su CA no está en el trust store de n8n,
+      # por eso no validamos la cadena (conexión cifrada, sin verificación de CA).
+      - DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED=${DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED:-false}
       # --- Región AWS para nodos que usen el rol IAM de la instancia ---
       - AWS_REGION=${AWS_REGION:-us-east-2}
       # --- Endpoint/credenciales de Grafana Cloud se configuran en el credential store de n8n,
