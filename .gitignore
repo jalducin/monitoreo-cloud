@@ -1,0 +1,60 @@
+# Ignore in all directories
+**/.DS_Store
+**/node_modules
+**/prompts_master.md
+
+# other dependencies
+**/.pnp
+**.pnp.js
+
+# testing
+**/coverage
+
+# production
+**/build
+**/dist
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE
+.idea
+.vscode
+
+# .env
+.mcp.json
+
+# Claude Code per-user settings
+**/.claude/settings.json
+**/.claude/settings.local.json
+
+# temp files
+**/tmp
+
+# git worktrees
+.worktrees/
+
+# ---------------------------------------------------------------------------
+# Secretos y credenciales — NUNCA versionar (ver docs/n8n-aws-standards.md §3)
+# ---------------------------------------------------------------------------
+# Variables de entorno (se versiona solo .env.example)
+**/.env
+**/.env.*
+!**/.env.example
+# Llaves SSH / certificados
+**/*.pem
+**/*.key
+**/*.ppk
+id_rsa*
+# Credenciales AWS / nube
+**/.aws/
+**/aws-credentials*
+**/*credentials*.json
+# Tokens y secretos de n8n / Grafana / OpenAI
+**/n8n-secrets*
+**/grafana-token*
+**/*.secret
+# Workflows n8n exportados CON credenciales (solo se versionan los limpios en n8n/workflows/)
+**/*.with-credentials.json

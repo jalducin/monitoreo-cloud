@@ -1,0 +1,47 @@
+schema: spec-driven
+
+# ---------------------------------------------------------------------------
+# Contexto del proyecto (RELLENAR al instanciar la plantilla)
+# Este bloque se muestra a la IA al crear cualquier artefacto OpenSpec.
+# Sustituye los placeholders <...> por la información real del proyecto.
+# Sirve para cualquier stack (Python, PHP, React, n8n, etc.).
+# ---------------------------------------------------------------------------
+context: |
+  Stack tecnológico: n8n (self-hosted en EC2 t2.micro, Docker), AWS CloudWatch, AWS Lambda (opcional),
+    Grafana Cloud (free), AWS CLI para despliegue, Docker Compose. Capa AI opcional con OpenAI vía n8n.
+  Arquitectura: pipeline de observabilidad pull-based — CloudWatch -> n8n (ETL de métricas) -> Grafana Cloud.
+  Dominio: monitoreo en tiempo real de infraestructura AWS para portafolio, 100% sobre planes gratuitos.
+  Restricción dura: todo debe mantenerse dentro del AWS Free Tier y Grafana Cloud free; revisar billing semanal.
+  Idioma: documentación y comentarios en español; identificadores de código según convención del lenguaje.
+  Control de versiones: conventional commits.
+
+  Estándares del proyecto (fuente única de verdad): toda creación e implementación de
+  artefactos DEBE seguir el contexto técnico en docs/. Leer y aplicar:
+  - docs/base-standards.md — principios base, idioma, skills, planificación y reglas OpenSpec.
+  - docs/documentation-standards.md — estructura y mantenimiento de la documentación.
+  - docs/n8n-aws-standards.md — estándares de n8n, workflows, AWS CLI, Free Tier y seguridad de credenciales.
+
+  Para implementar: adopta el agente relevante de ai-specs/agents/ según el tipo de cambio.
+
+# ---------------------------------------------------------------------------
+# Reglas por artefacto (agnósticas de tecnología)
+# ---------------------------------------------------------------------------
+rules:
+  _global:
+    - Antes de crear cualquier artefacto, leer y aplicar docs/base-standards.md
+    - Aplicar los docs/*-standards.md que correspondan al área del cambio
+    - Mantener consistencia con los specs existentes en openspec/specs/
+
+  tasks:
+    - Dividir las tareas en bloques de máximo 2 horas
+    - El primer paso (Step 0) SIEMPRE es crear la feature branch
+    - Toda lista de tareas debe incluir los pasos obligatorios definidos en
+      .claude/rules/openspec-tasks-mandatory-steps.md (rama, pruebas, verificación manual, documentación)
+
+  spec:
+    - Definir QUÉ debe hacer el sistema en términos de requisitos y escenarios verificables
+    - Cada capability nueva genera un specs/<nombre>/spec.md en kebab-case
+
+  design:
+    - Documentar el CÓMO: decisiones técnicas, alternativas consideradas y trade-offs
+    - Incluir solo lo necesario para implementar sin ambigüedad
