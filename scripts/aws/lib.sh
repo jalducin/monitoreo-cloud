@@ -24,7 +24,8 @@ DB_NAME="${DB_NAME:-n8n}"
 DB_USER="${DB_USER:-n8nadmin}"
 DB_PORT="${DB_PORT:-5432}"
 DB_ALLOCATED_GB="${DB_ALLOCATED_GB:-20}"
-DB_ENGINE_VERSION="${DB_ENGINE_VERSION:-16.4}"
+# Vacío = deja que RDS elija la versión default de PostgreSQL (más robusto entre regiones).
+DB_ENGINE_VERSION="${DB_ENGINE_VERSION:-}"
 # Directorio local (fuera del repo) para guardar la llave .pem
 KEY_DIR="${KEY_DIR:-$HOME/.monitoreo-cloud}"
 
@@ -61,9 +62,13 @@ guard_free_tier_db() {
 }
 
 # Devuelve el estado de la RDS del proyecto, o vacío si no existe.
+# Nota: describe-db-instances falla (exit≠0) si el identificador no existe; con set -e + pipefail
+# eso abortaría la sustitución $(...). Por eso se captura con `|| true` antes de filtrar.
 find_rds_status() {
-  aws rds describe-db-instances --db-instance-identifier "$DB_INSTANCE_ID" \
-    --query 'DBInstances[0].DBInstanceStatus' --output text 2>/dev/null | tr -d '[:space:]'
+  local s
+  s="$(aws rds describe-db-instances --db-instance-identifier "$DB_INSTANCE_ID" \
+        --query 'DBInstances[0].DBInstanceStatus' --output text 2>/dev/null || true)"
+  printf '%s' "$s" | tr -d '[:space:]'
 }
 
 account_id() { aws sts get-caller-identity --query Account --output text; }
