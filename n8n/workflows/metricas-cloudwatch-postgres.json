@@ -1,0 +1,224 @@
+{
+  "updatedAt": "2026-06-13T21:10:07.883Z",
+  "createdAt": "2026-06-13T20:54:49.116Z",
+  "id": "monitoreocloudwf",
+  "name": "Metricas CloudWatch -> Postgres",
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "id": "n1",
+      "name": "Cron 5 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "n2",
+      "name": "CloudWatch GetMetricStatistics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://monitoring.us-east-2.amazonaws.com/",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "aws",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "Action",
+              "value": "GetMetricStatistics"
+            },
+            {
+              "name": "Version",
+              "value": "2010-08-01"
+            },
+            {
+              "name": "Namespace",
+              "value": "AWS/EC2"
+            },
+            {
+              "name": "MetricName",
+              "value": "CPUUtilization"
+            },
+            {
+              "name": "Dimensions.member.1.Name",
+              "value": "InstanceId"
+            },
+            {
+              "name": "Dimensions.member.1.Value",
+              "value": "i-0dbfa95b85e86f444"
+            },
+            {
+              "name": "StartTime",
+              "value": "={{ $now.minus({ minutes: 15 }).toUTC().toISO() }}"
+            },
+            {
+              "name": "EndTime",
+              "value": "={{ $now.toUTC().toISO() }}"
+            },
+            {
+              "name": "Period",
+              "value": "300"
+            },
+            {
+              "name": "Statistics.member.1",
+              "value": "Average"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "aws": {
+          "id": "awscloudwatchro1",
+          "name": "AWS CloudWatch RO"
+        }
+      }
+    },
+    {
+      "id": "n3",
+      "name": "Transformar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const body = $input.first().json;\nlet raw = body.data !== undefined ? body.data : body;\nlet obj = typeof raw === 'string' ? JSON.parse(raw) : raw;\nconst result = obj && obj.GetMetricStatisticsResponse && obj.GetMetricStatisticsResponse.GetMetricStatisticsResult;\nlet dps = (result && result.Datapoints) || [];\nconst arr = Array.isArray(dps) ? dps : [dps];\nlet latest = null;\nfor (const d of arr) {\n  if (d && d.Average != null && d.Timestamp != null) {\n    if (!latest || Number(d.Timestamp) > Number(latest.Timestamp)) latest = d;\n  }\n}\nif (!latest) return [];\nconst tsIso = new Date(Number(latest.Timestamp) * 1000).toISOString();\nconst val = Number(latest.Average);\nconst instance = 'i-0dbfa95b85e86f444';\nconst region = 'us-east-2';\nconst q = \"INSERT INTO metrics (metric_name, value, ts, instance_id, region) VALUES ('cpu_utilization', \" + val + \", '\" + tsIso + \"', '\" + instance + \"', '\" + region + \"')\";\nreturn [{ json: { query: q, value: val, ts: tsIso } }];\n"
+      }
+    },
+    {
+      "id": "n4",
+      "name": "Insert metrics",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        960,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ $json.query }}",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "postgresmetric01",
+          "name": "Postgres metrics"
+        }
+      }
+    },
+    {
+      "id": "n0",
+      "name": "Run manual",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        120
+      ],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Cron 5 min": {
+      "main": [
+        [
+          {
+            "node": "CloudWatch GetMetricStatistics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CloudWatch GetMetricStatistics": {
+      "main": [
+        [
+          {
+            "node": "Transformar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transformar": {
+      "main": [
+        [
+          {
+            "node": "Insert metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run manual": {
+      "main": [
+        [
+          {
+            "node": "CloudWatch GetMetricStatistics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": null,
+  "versionId": null,
+  "versionCounter": 5,
+  "triggerCount": 0,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-06-13T20:54:49.116Z",
+      "createdAt": "2026-06-13T20:54:49.116Z",
+      "role": "workflow:owner",
+      "workflowId": "monitoreocloudwf",
+      "projectId": "J2F4giqudVFdqHmb",
+      "project": {
+        "updatedAt": "2026-06-13T19:30:32.603Z",
+        "createdAt": "2026-06-13T19:30:32.603Z",
+        "id": "J2F4giqudVFdqHmb",
+        "name": "Unnamed Project",
+        "type": "personal",
+        "icon": null,
+        "description": null
+      }
+    }
+  ]
+}

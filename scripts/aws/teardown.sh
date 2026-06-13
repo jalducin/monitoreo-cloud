@@ -79,6 +79,16 @@ if aws iam get-role --role-name "$IAM_ROLE_NAME" >/dev/null 2>&1; then
   ok "Rol IAM eliminado."
 fi
 
+# --- Usuario IAM de n8n (llaves + policy + usuario) --------------------------
+N8N_IAM_USER="${N8N_IAM_USER:-monitoreo-cloud-n8n}"
+if aws iam get-user --user-name "$N8N_IAM_USER" >/dev/null 2>&1; then
+  for k in $(aws iam list-access-keys --user-name "$N8N_IAM_USER" --query 'AccessKeyMetadata[].AccessKeyId' --output text); do
+    aws iam delete-access-key --user-name "$N8N_IAM_USER" --access-key-id "$k" >/dev/null 2>&1 || true
+  done
+  aws iam detach-user-policy --user-name "$N8N_IAM_USER" --policy-arn arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess >/dev/null 2>&1 || true
+  aws iam delete-user --user-name "$N8N_IAM_USER" >/dev/null 2>&1 && ok "Usuario IAM '${N8N_IAM_USER}' eliminado." || warn "No se pudo eliminar el usuario IAM de n8n."
+fi
+
 # --- Budget ------------------------------------------------------------------
 if [[ "$KEEP_BUDGET" != "1" ]]; then
   if aws budgets describe-budget --account-id "$ACCOUNT" --budget-name "monitoreo-cloud-budget" >/dev/null 2>&1; then

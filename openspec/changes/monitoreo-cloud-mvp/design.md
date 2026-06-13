@@ -66,10 +66,14 @@ usa ese PostgreSQL como datasource. Evita Prometheus/remote write y reaprovecha 
 **Alternativa descartada:** remote write a Grafana Cloud (Prometheus) — requería cuenta y token externos.
 **Esquema:** `metrics(id, ts, metric_name, value, instance_id, region, labels)` con índices por `ts` y `(metric_name, ts)`.
 
-### D5 — Credenciales AWS para n8n: rol IAM de la instancia (no llaves estáticas)
-n8n leerá CloudWatch usando el **instance profile** (rol IAM con política de solo lectura de CloudWatch),
-evitando llaves estáticas en el contenedor. El SDK/HTTP usa las credenciales temporales del metadata.
-**Alternativa descartada:** Access keys en `.env` (riesgo de fuga, rotación manual).
+### D5 — Credenciales AWS para n8n: usuario IAM dedicado de mínimo privilegio
+Los nodos AWS de n8n requieren **access keys** (no soportan el rol de instancia / IMDS). Por eso n8n usa
+un usuario IAM dedicado `monitoreo-cloud-n8n` con `CloudWatchReadOnlyAccess`, y sus llaves viven **solo en
+el credential store cifrado de n8n** (nunca en el repo). El rol de instancia (D-infra) se mantiene para
+operaciones a nivel host, pero el pipeline usa el usuario dedicado.
+**Alternativa considerada (descartada):** rol de instancia vía IMDS — ideal, pero los nodos AWS de n8n no
+lo consumen; habría que firmar SigV4 a mano leyendo IMDS, demasiado frágil para el MVP.
+**Mitigación de riesgo:** privilegio mínimo (solo lectura CloudWatch), llaves rotables, fuera del repo.
 
 ### D6 — Security group de mínimo privilegio + basic auth en n8n
 SSH (22) y n8n (5678) solo desde la IP `/32` del operador; n8n con `N8N_BASIC_AUTH` activo.

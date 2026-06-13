@@ -73,8 +73,9 @@ SHALL documentar los comandos para revisar el gasto (`aws ce get-cost-and-usage`
 ### Requirement: Teardown completo
 
 El sistema SHALL proveer un script de teardown que elimina todos los recursos creados (instancia EC2,
-**instancia RDS**, security groups, key pair, rol IAM y, opcionalmente, el budget), filtrando por los
-tags/identificadores del proyecto, y MUST pedir confirmación explícita o el flag `--yes` antes de destruir.
+security groups, key pair, rol IAM de la instancia, **usuario IAM de n8n** y, opcionalmente, el budget;
+además una RDS heredada si existiera), filtrando por los tags/identificadores del proyecto, y MUST pedir
+confirmación explícita o el flag `--yes` antes de destruir.
 
 #### Scenario: Teardown con confirmación
 

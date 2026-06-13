@@ -34,7 +34,30 @@ CREATE TABLE IF NOT EXISTS metrics (
 );
 ```
 
+## Archivo versionado
+
+`metricas-cloudwatch-postgres.json` es el workflow exportado (sin secretos; solo referencias a
+credenciales por `id`/nombre). Nodos: Cron 5 min · Run manual (executeWorkflowTrigger) ·
+CloudWatch GetMetricStatistics (HTTP + cred AWS, SigV4) · Transformar (Code) · Insert metrics (Postgres).
+
+> n8n convierte la respuesta XML de CloudWatch a JSON automáticamente (la credencial AWS); el nodo Code
+> parsea `GetMetricStatisticsResponse.GetMetricStatisticsResult.Datapoints`, toma el último por
+> `Timestamp` (epoch→ISO) y arma el `INSERT` en `metrics`.
+
+## Importar en una instancia nueva (CLI)
+
+1. Crea `credentials.json` a partir de `../credentials.example.json` con los valores reales
+   (llaves del usuario IAM `monitoreo-cloud-n8n` y la contraseña de Postgres). **No lo versiones.**
+2. Impórtalo y luego el workflow, dentro del contenedor:
+   ```bash
+   docker cp credentials.json n8n:/tmp/ && docker exec n8n n8n import:credentials --input=/tmp/credentials.json
+   docker cp metricas-cloudwatch-postgres.json n8n:/tmp/ && docker exec n8n n8n import:workflow --input=/tmp/metricas-cloudwatch-postgres.json
+   docker exec n8n n8n update:workflow --id=monitoreocloudwf --active=true
+   docker compose restart n8n   # registra el cron
+   rm credentials.json          # borra el plaintext
+   ```
+
 ## Cómo exportar sin credenciales
 
-En n8n: menú del workflow → **Download** (exporta el JSON). Verificar que el JSON **no** contenga
-tokens ni contraseñas (solo referencias a credenciales por nombre) antes de commitear.
+`docker exec n8n n8n export:workflow --id=monitoreocloudwf --output=/tmp/wf.json` (el export no incluye
+secretos, solo referencias). Verificar antes de commitear.
