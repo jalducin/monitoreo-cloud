@@ -6,7 +6,7 @@
 ## 1. Free Tier como restricción dura
 
 - **Nada fuera del Free Tier sin autorización explícita.** Límites de referencia:
-  - EC2 `t2.micro`: 750 hrs/mes (una sola instancia encendida 24/7 cabe el primer año).
+  - EC2 `t3.micro`: 750 hrs/mes (una sola instancia encendida 24/7 cabe el primer año).
   - RDS `db.t3.micro` Single-AZ: 750 hrs/mes + 20 GB gp2 + 20 GB backup (**solo 12 meses**).
   - CloudWatch: 10 métricas custom, 10 alarmas, 5 GB de logs ingeridos.
   - Lambda: 1M requests/mes + 400k GB-s.
@@ -58,7 +58,7 @@
 - Credenciales de la BD vía `.env` del host (en `.gitignore`) o secreto; nunca en el compose versionado
   ni impresas en logs. La password maestra autogenerada se guarda fuera del repo (`~/.monitoreo-cloud/`).
 - Fijar versiones de imagen (no `latest`) para reproducibilidad.
-- Recursos acotados al `t2.micro` (1 vCPU, 1 GB RAM): habilitar swap si hace falta; vigilar OOM.
+- Recursos acotados al `t3.micro` (1 vCPU, 1 GB RAM): habilitar swap si hace falta; vigilar OOM.
 
 ## 6. Verificación (según pasos obligatorios OpenSpec)
 

@@ -2,14 +2,16 @@
 
 ### Requirement: Provisión idempotente de la EC2 base
 
-El sistema SHALL provisionar, mediante scripts de AWS CLI, una instancia EC2 `t2.micro` con Amazon
-Linux 2023 en la región `us-east-2`, de forma idempotente: si ya existe una instancia con el tag
-`Project=monitoreo-cloud` en estado `running`/`pending`, el script NO MUST crear otra.
+El sistema SHALL provisionar, mediante scripts de AWS CLI, una instancia EC2 de un tipo
+**free-tier-eligible** en la región (por defecto `t3.micro`, x86_64) con Amazon Linux 2023 en
+`us-east-2`, de forma idempotente: si ya existe una instancia con el tag `Project=monitoreo-cloud`
+en estado `running`/`pending`, el script NO MUST crear otra. El tipo elegible se valida contra la
+API de AWS (varía por región/cuenta), no se asume fijo.
 
 #### Scenario: Primera provisión
 
 - **WHEN** el operador ejecuta el script de provisión y no existe ninguna instancia con el tag del proyecto
-- **THEN** se crea exactamente una EC2 `t2.micro` Amazon Linux 2023 con los tags `Project=monitoreo-cloud`, `Env=free-tier`, `ManagedBy=cli` y el script imprime su `InstanceId` e IP pública
+- **THEN** se crea exactamente una EC2 `t3.micro` Amazon Linux 2023 con los tags `Project=monitoreo-cloud`, `Env=free-tier`, `ManagedBy=cli` y el script imprime su `InstanceId` e IP pública
 
 #### Scenario: Re-ejecución idempotente
 
@@ -18,8 +20,8 @@ Linux 2023 en la región `us-east-2`, de forma idempotente: si ya existe una ins
 
 #### Scenario: Tipo de instancia fuera de Free Tier
 
-- **WHEN** se intenta provisionar con un tipo de instancia distinto de `t2.micro`
-- **THEN** el script aborta con error explicando que solo `t2.micro` está dentro del Free Tier, salvo override explícito
+- **WHEN** se intenta provisionar con un tipo de instancia que no es free-tier-eligible en la región
+- **THEN** el script aborta con error listando los tipos elegibles disponibles, salvo override explícito (`ALLOW_NON_FREE_TIER=1`)
 
 ### Requirement: Key pair y security group mínimos
 

@@ -20,10 +20,10 @@
 - [ ] 2.1 `scripts/aws/lib.sh`: helpers comunes (región `us-east-2`, tags, detección de IP, idempotencia por tag)
 - [ ] 2.2 `scripts/aws/provision.sh`: key pair + security group mínimo (22 y 5678 solo IP `/32` del operador)
 - [ ] 2.3 `scripts/aws/provision.sh`: rol IAM + instance profile con política de **solo lectura de CloudWatch**
-- [ ] 2.4 `scripts/aws/provision.sh`: lanzar EC2 `t2.micro` Amazon Linux 2023 con tags y user-data (instala Docker)
+- [ ] 2.4 `scripts/aws/provision.sh`: lanzar EC2 `t3.micro` Amazon Linux 2023 con tags y user-data (instala Docker)
 - [ ] 2.5 `scripts/aws/provision.sh`: security group de la BD (5432) que solo admite el SG de la EC2
 - [ ] 2.6 `scripts/aws/provision.sh`: **RDS PostgreSQL `db.t3.micro`** Single-AZ, 20 GB, sin acceso público, idempotente; password maestra desde env/secreto; abortar si clase ≠ `db.t3.micro`/`db.t4g.micro`
-- [ ] 2.7 `scripts/aws/provision.sh`: idempotencia EC2 (no recrea si ya existe instancia con tag) + abortar si tipo ≠ `t2.micro`
+- [ ] 2.7 `scripts/aws/provision.sh`: idempotencia EC2 (no recrea si ya existe instancia con tag) + abortar si el tipo no es free-tier-eligible (validado contra la API)
 - [ ] 2.8 `scripts/aws/budget.sh`: AWS Budget mensual de $1 USD con alerta por email
 - [ ] 2.9 `scripts/aws/status.sh`: reporta EC2, RDS (endpoint/estado), security groups y comando de revisión de costos
 - [ ] 2.10 `scripts/aws/teardown.sh`: elimina recursos por tag (EC2, **RDS sin snapshot final**, SGs, key pair, rol IAM, budget) con confirmación/`--yes` y verificación posterior
@@ -68,7 +68,7 @@
 
 ## 8. Step N+2 — Verificación manual según stack (OBLIGATORIO — EL AGENTE EJECUTA)
 
-- [ ] 8.1 **CLI/infra**: ejecutar `provision.sh` (válido) y un caso inválido (tipo ≠ `t2.micro`); verificar salida y códigos de retorno; restaurar con `teardown.sh`
+- [ ] 8.1 **CLI/infra**: ejecutar `provision.sh` (válido) y un caso inválido (tipo no free-tier-eligible); verificar salida y códigos de retorno; restaurar con `teardown.sh`
 - [ ] 8.2 **n8n + RDS**: en la EC2, `docker compose up -d`, confirmar conexión a RDS en logs, abrir UI (basic auth), ejecutar el workflow manualmente y confirmar 2xx de Grafana Cloud
 - [ ] 8.3 **Datos/observabilidad**: confirmar que las métricas llegan al dashboard de Grafana y que la alerta dispara con un umbral de prueba
 - [ ] 8.4 **Costos**: ejecutar `aws ce get-cost-and-usage` y confirmar que el proyecto sigue en $0 / dentro de Free Tier

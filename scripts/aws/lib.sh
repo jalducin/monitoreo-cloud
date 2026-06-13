@@ -5,12 +5,17 @@
 
 set -euo pipefail
 
+# En Git Bash/MSYS, los argumentos que empiezan con '/' (p. ej. el nombre del parámetro SSM
+# /aws/service/...) se convierten a rutas Windows y rompen las llamadas. Lo desactivamos.
+# En Linux/macOS esta variable simplemente se ignora.
+export MSYS_NO_PATHCONV=1
+
 # --- Configuración del proyecto (override por variables de entorno) ---------
 export AWS_REGION="${AWS_REGION:-us-east-2}"
 export AWS_DEFAULT_REGION="$AWS_REGION"
 PROJECT_TAG="${PROJECT_TAG:-monitoreo-cloud}"
 ENV_TAG="${ENV_TAG:-free-tier}"
-INSTANCE_TYPE="${INSTANCE_TYPE:-t2.micro}"   # Free Tier: solo t2.micro
+INSTANCE_TYPE="${INSTANCE_TYPE:-t3.micro}"   # Free Tier elegible en us-east-2 (x86_64)
 KEY_NAME="${KEY_NAME:-monitoreo-cloud-key}"
 SG_NAME="${SG_NAME:-monitoreo-cloud-sg}"
 IAM_ROLE_NAME="${IAM_ROLE_NAME:-monitoreo-cloud-ec2-role}"
@@ -46,9 +51,18 @@ require_aws() {
 }
 
 guard_free_tier() {
-  # Restricción dura: solo t2.micro salvo override explícito ALLOW_NON_FREE_TIER=1
-  if [[ "$INSTANCE_TYPE" != "t2.micro" && "${ALLOW_NON_FREE_TIER:-0}" != "1" ]]; then
-    die "INSTANCE_TYPE='$INSTANCE_TYPE' está fuera del Free Tier. Solo 't2.micro'. Usa ALLOW_NON_FREE_TIER=1 para forzar."
+  # Restricción dura: el tipo debe ser free-tier-eligible en la región (varía por región/cuenta).
+  # Se valida contra la API; override explícito con ALLOW_NON_FREE_TIER=1.
+  [[ "${ALLOW_NON_FREE_TIER:-0}" == "1" ]] && return 0
+  local eligible
+  eligible="$(aws ec2 describe-instance-types --filters Name=free-tier-eligible,Values=true \
+              --query 'InstanceTypes[].InstanceType' --output text 2>/dev/null || true)"
+  if [[ -n "$eligible" ]]; then
+    grep -qw "$INSTANCE_TYPE" <<<"$eligible" \
+      || die "INSTANCE_TYPE='$INSTANCE_TYPE' no es free-tier-eligible en ${AWS_REGION}. Opciones: ${eligible}. Usa ALLOW_NON_FREE_TIER=1 para forzar."
+  else
+    case "$INSTANCE_TYPE" in t3.micro|t2.micro|t4g.micro) : ;; \
+      *) die "INSTANCE_TYPE='$INSTANCE_TYPE' fuera de Free Tier (no se pudo consultar la API). Usa t3.micro." ;; esac
   fi
 }
 
@@ -83,9 +97,13 @@ operator_ip() {
 
 # AMI más reciente de Amazon Linux 2023 (x86_64) vía SSM Parameter Store.
 al2023_ami() {
-  aws ssm get-parameters \
+  local ami
+  ami="$(aws ssm get-parameters \
     --names /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64 \
-    --query 'Parameters[0].Value' --output text
+    --query 'Parameters[0].Value' --output text 2>/dev/null || true)"
+  [[ -n "$ami" && "$ami" != "None" && "$ami" == ami-* ]] \
+    || die "No se pudo resolver el AMI de Amazon Linux 2023 (obtuve: '${ami}'). Revisa permisos de SSM o MSYS_NO_PATHCONV."
+  printf '%s' "$ami"
 }
 
 # Devuelve el InstanceId de la instancia del proyecto en running/pending, o vacío.

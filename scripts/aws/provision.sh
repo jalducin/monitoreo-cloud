@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Provisiona la infraestructura base de Monitoreo Cloud en AWS Free Tier (us-east-2):
-#   key pair + security group mínimo + rol IAM (solo lectura CloudWatch) + EC2 t2.micro.
+#   key pair + security group mínimo + rol IAM (solo lectura CloudWatch) + EC2 t3.micro.
 # Idempotente: no recrea la instancia si ya existe una con el tag del proyecto.
 # Uso: ./provision.sh
 set -euo pipefail
@@ -88,10 +88,12 @@ else
     warn "Password de BD generada y guardada en ${KEY_DIR}/db-password.txt (fuera del repo)."
   fi
   log "Creando RDS PostgreSQL '${DB_INSTANCE_ID}' (${DB_INSTANCE_CLASS}, Single-AZ, ${DB_ALLOCATED_GB}GB)..."
+  ENGINE_ARGS=()
+  [[ -n "$DB_ENGINE_VERSION" ]] && ENGINE_ARGS=(--engine-version "$DB_ENGINE_VERSION")
   aws rds create-db-instance \
     --db-instance-identifier "$DB_INSTANCE_ID" \
     --db-instance-class "$DB_INSTANCE_CLASS" \
-    --engine postgres --engine-version "$DB_ENGINE_VERSION" \
+    --engine postgres "${ENGINE_ARGS[@]}" \
     --master-username "$DB_USER" --master-user-password "$DB_PASSWORD" \
     --allocated-storage "$DB_ALLOCATED_GB" --storage-type gp2 \
     --db-name "$DB_NAME" --port "$DB_PORT" \

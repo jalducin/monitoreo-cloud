@@ -1,4 +1,4 @@
-# n8n self-hosted para Monitoreo Cloud (EC2 t2.micro, Amazon Linux 2023).
+# n8n self-hosted para Monitoreo Cloud (EC2 t3.micro, Amazon Linux 2023).
 # Secretos vía .env del host (NO versionado). Ver .env.example en la raíz del repo.
 # Estándares: docs/n8n-aws-standards.md §4-§5.
 services:
@@ -35,7 +35,7 @@ services:
       #     NO aquí (ver docs/DEPLOY.md). ---
     volumes:
       - n8n_data:/home/node/.n8n
-    # Límites acordes a t2.micro (1 vCPU / 1 GB). Evita OOM dejando margen al host.
+    # Límites acordes a t3.micro (1 vCPU / 1 GB). Evita OOM dejando margen al host.
     deploy:
       resources:
         limits:

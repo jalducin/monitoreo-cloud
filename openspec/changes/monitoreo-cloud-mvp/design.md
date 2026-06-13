@@ -7,14 +7,14 @@ toda decisión técnica se subordina a permanecer en los límites gratuitos.
 
 Stakeholders: el operador/autor (uso de portafolio). Sin SLA ni multi-usuario.
 
-Restricciones: 1 vCPU / 1 GB RAM (`t2.micro`); CloudWatch limitado a 10 métricas custom y 5 GB de logs;
+Restricciones: 1 vCPU / 1 GB RAM (`t3.micro`); CloudWatch limitado a 10 métricas custom y 5 GB de logs;
 Grafana Cloud free con retención de 14 días; secretos jamás en el repo.
 
 ## Goals / Non-Goals
 
 **Goals:**
 - Provisión y limpieza de infra AWS **idempotente y por CLI** (reproducible, sin consola manual salvo lo inevitable).
-- n8n self-hosted estable en `t2.micro` con persistencia y secretos seguros.
+- n8n self-hosted estable en `t3.micro` con persistencia y secretos seguros.
 - Pipeline CloudWatch → n8n → Grafana Cloud funcionando con dashboards y al menos una alerta.
 - Guardarraíles de costo (budget $1 + alerta) y teardown completo.
 - Repo público con README de portafolio.
@@ -49,7 +49,7 @@ en el disco de la EC2 y se pierden si se reemplaza la instancia; sin backups ges
 contraseña maestra se toma de variable de entorno/secreto, nunca del repo.
 
 ### D3 — Grafana **Cloud** (no self-hosted)
-El `t2.micro` no soporta cómodamente n8n + Grafana + Prometheus. Grafana Cloud free externaliza
+El `t3.micro` no soporta cómodamente n8n + Grafana + Prometheus. Grafana Cloud free externaliza
 almacenamiento y dashboards sin costo y con retención suficiente para el MVP.
 **Alternativa descartada:** Grafana + Prometheus self-hosted en el mismo EC2 (riesgo de OOM en 1 GB RAM).
 **Implicación:** el alta de la cuenta Grafana Cloud y la obtención del endpoint/token de remote write
@@ -76,8 +76,8 @@ filtrar costos y para que el teardown encuentre todo.
 ## Risks / Trade-offs
 
 - **Salirse del Free Tier** → mitigación: budget $1 + alerta, frecuencia de cron conservadora,
-  un solo `t2.micro`, teardown disponible, revisión semanal documentada.
-- **OOM en `t2.micro` (1 GB)** → mitigación: solo n8n en el host (Grafana en la nube), swap opcional,
+  un solo `t3.micro`, teardown disponible, revisión semanal documentada.
+- **OOM en `t3.micro` (1 GB)** → mitigación: solo n8n en el host (Grafana en la nube), swap opcional,
   límites de recursos en Compose.
 - **Fuga de secretos** → mitigación: `.gitignore` reforzado, export de workflows sin credenciales,
   rol IAM en vez de llaves, `.pem` fuera del repo.
@@ -92,7 +92,7 @@ filtrar costos y para que el teardown encuentre todo.
 ## Migration Plan
 
 Despliegue incremental (sin estado previo que migrar):
-1. `scripts/aws/provision.sh` → key pair, security groups (EC2 y BD), rol IAM, EC2 `t2.micro`,
+1. `scripts/aws/provision.sh` → key pair, security groups (EC2 y BD), rol IAM, EC2 `t3.micro`,
    **RDS PostgreSQL `db.t3.micro`**, tags.
 2. `scripts/aws/budget.sh` → budget $1 + alerta.
 3. En la EC2: instalar Docker, subir `infra/docker-compose.yml` + `.env` (con datos de conexión a RDS),

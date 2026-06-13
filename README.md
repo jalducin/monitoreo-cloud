@@ -22,7 +22,7 @@
                     │  pull cada N min (rol IAM, solo lectura)
                     ▼
 ┌───────────────────────────────────────────────────────────────┐
-│  n8n  — EC2 t2.micro (Amazon Linux 2023, Docker Compose)        │
+│  n8n  — EC2 t3.micro (Amazon Linux 2023, Docker Compose)        │
 │  Schedule → CloudWatch → transforma (Prometheus) → HTTP push    │
 │  persistencia ↔ AWS RDS PostgreSQL (db.t3.micro, privada)       │
 └───────────────────────────────────────────────────────────────┘
@@ -39,7 +39,7 @@ Detalle de decisiones técnicas: [`openspec/changes/monitoreo-cloud-mvp/design.m
 
 | Componente | Tecnología | Plan gratuito |
 |---|---|---|
-| Cómputo | AWS EC2 `t2.micro` (Amazon Linux 2023) | 750 hrs/mes |
+| Cómputo | AWS EC2 `t3.micro` (Amazon Linux 2023) | 750 hrs/mes |
 | Base de datos | AWS RDS PostgreSQL `db.t3.micro` (backend de n8n) | 750 hrs/mes · 20 GB (12 meses) |
 | Métricas / logs | AWS CloudWatch | 10 métricas custom · 5 GB logs |
 | Orquestación / ETL | n8n (Docker) | self-hosted |
@@ -70,7 +70,7 @@ Despliegue completo (n8n + Grafana + pipeline): **[`docs/DEPLOY.md`](docs/DEPLOY
 
 | Script | Para qué |
 |---|---|
-| `scripts/aws/provision.sh` | Provisiona EC2 t2.micro, RDS PostgreSQL, security groups, rol IAM y key pair (idempotente) |
+| `scripts/aws/provision.sh` | Provisiona EC2 t3.micro, RDS PostgreSQL, security groups, rol IAM y key pair (idempotente) |
 | `scripts/aws/budget.sh` | Crea budget de $1 USD con alerta por correo |
 | `scripts/aws/status.sh` | Reporta recursos y costo del mes |
 | `scripts/aws/teardown.sh` | Elimina todos los recursos por tag (`--yes` para no confirmar) |

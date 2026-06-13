@@ -11,8 +11,8 @@ arquitectura cloud usando exclusivamente planes gratuitos (AWS Free Tier + Grafa
 
 ## Stack tecnológico
 
-- Orquestación / ETL: **n8n** (self-hosted, Docker en EC2 t2.micro, Amazon Linux 2023)
-- Cómputo: **AWS EC2 t2.micro** (750 hrs/mes Free Tier)
+- Orquestación / ETL: **n8n** (self-hosted, Docker en EC2 t3.micro, Amazon Linux 2023)
+- Cómputo: **AWS EC2 t3.micro** (750 hrs/mes Free Tier)
 - Métricas y logs: **AWS CloudWatch** (10 métricas custom, 5 GB logs Free Tier)
 - Eventos / disparadores: **AWS Lambda** (1M requests/mes Free Tier) — opcional
 - Visualización: **Grafana Cloud** (free: 3 usuarios, 10k series de métricas)
@@ -25,7 +25,7 @@ arquitectura cloud usando exclusivamente planes gratuitos (AWS Free Tier + Grafa
 Pipeline de observabilidad (pull-based):
 
 ```
-AWS CloudWatch  ──>  n8n (EC2 t2.micro, Docker)  ──>  Grafana Cloud
+AWS CloudWatch  ──>  n8n (EC2 t3.micro, Docker)  ──>  Grafana Cloud
   métricas/logs       jala cada X min,                 dashboards +
                       transforma y enriquece           alertas
 ```

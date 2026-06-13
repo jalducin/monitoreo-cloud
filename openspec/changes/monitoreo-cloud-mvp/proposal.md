@@ -8,7 +8,7 @@ provisión reproducible por CLI, recolección automatizada de métricas y visual
 
 ## What Changes
 
-- Provisión por **AWS CLI idempotente** (región `us-east-2`) de una EC2 `t2.micro` (Amazon Linux 2023),
+- Provisión por **AWS CLI idempotente** (región `us-east-2`) de una EC2 `t3.micro` (Amazon Linux 2023),
   key pair, security group mínimo y etiquetado obligatorio (`Project/Env/ManagedBy`).
 - **Presupuesto de billing de $1 USD con alerta por correo** y comandos documentados para revisar gasto.
 - **n8n self-hosted** en la EC2 vía **Docker Compose**, con secretos fuera del repo.
@@ -27,7 +27,7 @@ provisión reproducible por CLI, recolección automatizada de métricas y visual
 
 ### New Capabilities
 - `infra-aws-free-tier`: provisión y limpieza idempotente por AWS CLI de la infraestructura base
-  (EC2 t2.micro, RDS PostgreSQL db.t3.micro, key pair, security groups, tags) y guardarraíles de costo
+  (EC2 t3.micro, RDS PostgreSQL db.t3.micro, key pair, security groups, tags) y guardarraíles de costo
   (budget $1 + alerta billing), garantizando permanencia dentro del Free Tier en `us-east-2`.
 - `n8n-host`: n8n self-hosted en la EC2 con Docker Compose, **persistencia en RDS PostgreSQL** y
   manejo seguro de secretos (env/credential store, nunca en el repo).

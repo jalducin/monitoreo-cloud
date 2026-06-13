@@ -25,7 +25,7 @@ cd scripts/aws
 ./provision.sh
 # Crea: key pair (.pem en ~/.monitoreo-cloud/), security group de EC2 (22 y 5678 solo tu IP),
 #       security group de BD (5432 solo desde la EC2), rol IAM (CloudWatchReadOnlyAccess) +
-#       instance profile, EC2 t2.micro (Amazon Linux 2023) y RDS PostgreSQL db.t3.micro (Single-AZ).
+#       instance profile, EC2 t3.micro (Amazon Linux 2023) y RDS PostgreSQL db.t3.micro (Single-AZ).
 # Imprime InstanceId, IP pública, endpoint de RDS y el comando SSH.
 # La password de la BD, si se autogenera, queda en ~/.monitoreo-cloud/db-password.txt.
 ./status.sh                              # verifica EC2, RDS, SGs y costos
