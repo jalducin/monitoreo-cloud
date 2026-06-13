@@ -24,6 +24,7 @@
 ┌───────────────────────────────────────────────────────────────┐
 │  n8n  — EC2 t2.micro (Amazon Linux 2023, Docker Compose)        │
 │  Schedule → CloudWatch → transforma (Prometheus) → HTTP push    │
+│  persistencia ↔ AWS RDS PostgreSQL (db.t3.micro, privada)       │
 └───────────────────────────────────────────────────────────────┘
                     │  remote write (HTTPS + token)
                     ▼
@@ -39,6 +40,7 @@ Detalle de decisiones técnicas: [`openspec/changes/monitoreo-cloud-mvp/design.m
 | Componente | Tecnología | Plan gratuito |
 |---|---|---|
 | Cómputo | AWS EC2 `t2.micro` (Amazon Linux 2023) | 750 hrs/mes |
+| Base de datos | AWS RDS PostgreSQL `db.t3.micro` (backend de n8n) | 750 hrs/mes · 20 GB (12 meses) |
 | Métricas / logs | AWS CloudWatch | 10 métricas custom · 5 GB logs |
 | Orquestación / ETL | n8n (Docker) | self-hosted |
 | Visualización | Grafana Cloud | free (3 usuarios · 10k series) |
@@ -68,7 +70,7 @@ Despliegue completo (n8n + Grafana + pipeline): **[`docs/DEPLOY.md`](docs/DEPLOY
 
 | Script | Para qué |
 |---|---|
-| `scripts/aws/provision.sh` | Provisiona EC2 t2.micro, security group, rol IAM y key pair (idempotente) |
+| `scripts/aws/provision.sh` | Provisiona EC2 t2.micro, RDS PostgreSQL, security groups, rol IAM y key pair (idempotente) |
 | `scripts/aws/budget.sh` | Crea budget de $1 USD con alerta por correo |
 | `scripts/aws/status.sh` | Reporta recursos y costo del mes |
 | `scripts/aws/teardown.sh` | Elimina todos los recursos por tag (`--yes` para no confirmar) |
@@ -90,7 +92,8 @@ Despliegue completo (n8n + Grafana + pipeline): **[`docs/DEPLOY.md`](docs/DEPLOY
 
 - Secretos **nunca** en el repo: `.env`, `*.pem`, tokens y credenciales están en `.gitignore`.
 - n8n usa el **rol IAM de la instancia** (solo lectura de CloudWatch), sin llaves estáticas.
-- Security group de mínimo privilegio (SSH y n8n solo desde la IP del operador) + basic auth en n8n.
+- Security groups de mínimo privilegio (SSH y n8n solo desde la IP del operador) + basic auth en n8n.
+- **RDS PostgreSQL sin acceso público**: solo alcanzable desde el security group de la EC2 (puerto 5432); credenciales en `.env`/secreto.
 
 ## 📚 Documentación
 

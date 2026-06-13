@@ -33,8 +33,20 @@ idempotentes (consultar por tag antes de crear) son suficientes y transparentes.
 **Trade-off:** la idempotencia es responsabilidad nuestra (checks explícitos por tag).
 
 ### D2 — Docker Compose para n8n en EC2
-n8n oficial recomienda Docker; Compose da persistencia por volumen, versión fijada y arranque simple.
+n8n oficial recomienda Docker; Compose da arranque simple, versión fijada y configuración por entorno.
 **Alternativa descartada:** instalar n8n vía npm (más frágil, gestión de procesos manual).
+
+### D8 — Persistencia de n8n en AWS RDS PostgreSQL (no SQLite/volumen)
+n8n se configura con `DB_TYPE=postgresdb` apuntando a una RDS PostgreSQL `db.t3.micro` Single-AZ
+(20 GB, sin acceso público). Desacopla los datos del ciclo de vida del contenedor y de la EC2:
+si se recrea la instancia, los workflows y credenciales persisten en la BD gestionada (con backups
+automáticos de RDS). Encaja en Free Tier (12 meses, Single-AZ).
+**Alternativa descartada:** SQLite en volumen Docker (default de n8n) — simple, pero los datos viven
+en el disco de la EC2 y se pierden si se reemplaza la instancia; sin backups gestionados.
+**Trade-offs:** RDS free es solo 12 meses y añade una pieza más; mitigado fijando la clase a
+`db.t3.micro`, Single-AZ y teardown que borra la BD (sin snapshot final) para no incurrir en costo.
+**Seguridad:** la RDS no es pública; solo el security group de la EC2 puede alcanzarla en 5432; la
+contraseña maestra se toma de variable de entorno/secreto, nunca del repo.
 
 ### D3 — Grafana **Cloud** (no self-hosted)
 El `t2.micro` no soporta cómodamente n8n + Grafana + Prometheus. Grafana Cloud free externaliza
@@ -72,14 +84,19 @@ filtrar costos y para que el teardown encuentre todo.
 - **IP pública dinámica del operador rompe el SG** → mitigación: el script recalcula y actualiza la regla.
 - **Pasos manuales en Grafana Cloud (alta + token)** → mitigación: documentados paso a paso; el token
   se inyecta vía credential store, nunca al repo.
-- **Pérdida de datos de n8n al recrear contenedor** → mitigación: volumen persistente.
+- **Pérdida de datos de n8n al recrear contenedor/EC2** → mitigación: persistencia en RDS PostgreSQL
+  con backups automáticos; el contenedor es desechable.
+- **RDS fuera de Free Tier o costo tras 12 meses** → mitigación: clase fijada a `db.t3.micro` Single-AZ,
+  20 GB; guard que aborta con clases no elegibles; teardown borra la BD; budget+alerta vigilan el gasto.
 
 ## Migration Plan
 
 Despliegue incremental (sin estado previo que migrar):
-1. `scripts/aws/provision.sh` → key pair, security group, rol IAM, EC2 `t2.micro`, tags.
+1. `scripts/aws/provision.sh` → key pair, security groups (EC2 y BD), rol IAM, EC2 `t2.micro`,
+   **RDS PostgreSQL `db.t3.micro`**, tags.
 2. `scripts/aws/budget.sh` → budget $1 + alerta.
-3. En la EC2: instalar Docker, subir `infra/docker-compose.yml` + `.env`, `docker compose up -d`.
+3. En la EC2: instalar Docker, subir `infra/docker-compose.yml` + `.env` (con datos de conexión a RDS),
+   `docker compose up -d` (n8n conecta a RDS).
 4. Configurar credenciales en n8n (rol IAM ya disponible; token Grafana en credential store).
 5. Importar `n8n/workflows/*.json`, ejecutar y validar llegada de métricas a Grafana.
 6. Importar dashboard y alerta desde `grafana/`.

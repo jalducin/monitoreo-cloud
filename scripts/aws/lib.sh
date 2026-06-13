@@ -16,6 +16,15 @@ SG_NAME="${SG_NAME:-monitoreo-cloud-sg}"
 IAM_ROLE_NAME="${IAM_ROLE_NAME:-monitoreo-cloud-ec2-role}"
 IAM_PROFILE_NAME="${IAM_PROFILE_NAME:-monitoreo-cloud-ec2-profile}"
 N8N_PORT="${N8N_PORT:-5678}"
+# --- RDS PostgreSQL (Free Tier: db.t3.micro, Single-AZ, 20 GB, 12 meses) ---
+DB_SG_NAME="${DB_SG_NAME:-monitoreo-cloud-db-sg}"
+DB_INSTANCE_ID="${DB_INSTANCE_ID:-monitoreo-cloud-db}"
+DB_INSTANCE_CLASS="${DB_INSTANCE_CLASS:-db.t3.micro}"
+DB_NAME="${DB_NAME:-n8n}"
+DB_USER="${DB_USER:-n8nadmin}"
+DB_PORT="${DB_PORT:-5432}"
+DB_ALLOCATED_GB="${DB_ALLOCATED_GB:-20}"
+DB_ENGINE_VERSION="${DB_ENGINE_VERSION:-16.4}"
 # Directorio local (fuera del repo) para guardar la llave .pem
 KEY_DIR="${KEY_DIR:-$HOME/.monitoreo-cloud}"
 
@@ -40,6 +49,21 @@ guard_free_tier() {
   if [[ "$INSTANCE_TYPE" != "t2.micro" && "${ALLOW_NON_FREE_TIER:-0}" != "1" ]]; then
     die "INSTANCE_TYPE='$INSTANCE_TYPE' está fuera del Free Tier. Solo 't2.micro'. Usa ALLOW_NON_FREE_TIER=1 para forzar."
   fi
+}
+
+guard_free_tier_db() {
+  # RDS Free Tier: solo db.t3.micro / db.t4g.micro salvo override explícito.
+  case "$DB_INSTANCE_CLASS" in
+    db.t3.micro|db.t4g.micro) : ;;
+    *) [[ "${ALLOW_NON_FREE_TIER:-0}" == "1" ]] || \
+       die "DB_INSTANCE_CLASS='$DB_INSTANCE_CLASS' fuera de Free Tier. Solo db.t3.micro/db.t4g.micro. Usa ALLOW_NON_FREE_TIER=1 para forzar." ;;
+  esac
+}
+
+# Devuelve el estado de la RDS del proyecto, o vacío si no existe.
+find_rds_status() {
+  aws rds describe-db-instances --db-instance-identifier "$DB_INSTANCE_ID" \
+    --query 'DBInstances[0].DBInstanceStatus' --output text 2>/dev/null | tr -d '[:space:]'
 }
 
 account_id() { aws sts get-caller-identity --query Account --output text; }

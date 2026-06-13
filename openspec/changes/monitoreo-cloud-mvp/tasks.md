@@ -21,17 +21,20 @@
 - [ ] 2.2 `scripts/aws/provision.sh`: key pair + security group mínimo (22 y 5678 solo IP `/32` del operador)
 - [ ] 2.3 `scripts/aws/provision.sh`: rol IAM + instance profile con política de **solo lectura de CloudWatch**
 - [ ] 2.4 `scripts/aws/provision.sh`: lanzar EC2 `t2.micro` Amazon Linux 2023 con tags y user-data (instala Docker)
-- [ ] 2.5 `scripts/aws/provision.sh`: idempotencia (no recrea si ya existe instancia con tag del proyecto) + abortar si tipo ≠ `t2.micro`
-- [ ] 2.6 `scripts/aws/budget.sh`: AWS Budget mensual de $1 USD con alerta por email
-- [ ] 2.7 `scripts/aws/status.sh`: reporta instancia, IP, security group y comando de revisión de costos (`aws ce get-cost-and-usage`)
-- [ ] 2.8 `scripts/aws/teardown.sh`: elimina recursos por tag (instancia, SG, key pair, budget) con confirmación/`--yes` y verificación posterior
+- [ ] 2.5 `scripts/aws/provision.sh`: security group de la BD (5432) que solo admite el SG de la EC2
+- [ ] 2.6 `scripts/aws/provision.sh`: **RDS PostgreSQL `db.t3.micro`** Single-AZ, 20 GB, sin acceso público, idempotente; password maestra desde env/secreto; abortar si clase ≠ `db.t3.micro`/`db.t4g.micro`
+- [ ] 2.7 `scripts/aws/provision.sh`: idempotencia EC2 (no recrea si ya existe instancia con tag) + abortar si tipo ≠ `t2.micro`
+- [ ] 2.8 `scripts/aws/budget.sh`: AWS Budget mensual de $1 USD con alerta por email
+- [ ] 2.9 `scripts/aws/status.sh`: reporta EC2, RDS (endpoint/estado), security groups y comando de revisión de costos
+- [ ] 2.10 `scripts/aws/teardown.sh`: elimina recursos por tag (EC2, **RDS sin snapshot final**, SGs, key pair, rol IAM, budget) con confirmación/`--yes` y verificación posterior
 
 ## 3. n8n-host — Docker Compose en EC2
 
-- [ ] 3.1 `infra/docker-compose.yml`: n8n con imagen de versión **fijada**, volumen persistente y puerto 5678
-- [ ] 3.2 Configurar basic auth (`N8N_BASIC_AUTH_*`) y variables sensibles vía `.env` (no versionado)
-- [ ] 3.3 Documentar en `docs/DEPLOY.md` cómo subir el compose a la EC2 y `docker compose up -d`
-- [ ] 3.4 (Opcional) Configurar swap en la EC2 y límites de recursos en Compose para evitar OOM en 1 GB
+- [ ] 3.1 `infra/docker-compose.yml`: n8n con imagen **fijada**, `DB_TYPE=postgresdb` apuntando a RDS, puerto 5678
+- [ ] 3.2 Configurar basic auth (`N8N_BASIC_AUTH_*`), conexión a RDS (`DB_POSTGRESDB_*`) y secretos vía `.env` (no versionado)
+- [ ] 3.3 Documentar en `docs/DEPLOY.md` cómo subir el compose a la EC2, crear el `.env` con datos de RDS y `docker compose up -d`
+- [ ] 3.4 Verificar que n8n conecta a RDS al arrancar (logs sin error de BD) y persiste tras recrear el contenedor
+- [ ] 3.5 (Opcional) Configurar swap en la EC2 y límites de recursos en Compose para evitar OOM en 1 GB
 
 ## 4. metrics-pipeline — workflow n8n
 
@@ -56,17 +59,17 @@
 
 ## 7. Step N+1 — Ejecutar pruebas y verificar estado (OBLIGATORIO — EL AGENTE EJECUTA)
 
-- [ ] 7.1 Capturar estado previo: `aws ec2 describe-instances` y `aws budgets describe-budgets` (conteos antes)
+- [ ] 7.1 Capturar estado previo: `aws ec2 describe-instances`, `aws rds describe-db-instances` y `aws budgets describe-budgets` (conteos antes)
 - [ ] 7.2 Ejecutar checks de sintaxis (6.1) y `docker compose config`; confirmar sin errores
-- [ ] 7.3 Ejecutar `provision.sh` y verificar instancia `running`, SG y tags vía `describe-*`
-- [ ] 7.4 Verificar idempotencia: re-ejecutar `provision.sh` y confirmar que NO crea recursos nuevos
-- [ ] 7.5 Verificar estado posterior y, si la corrida fue de prueba, restaurar con `teardown.sh --yes`
+- [ ] 7.3 Ejecutar `provision.sh` y verificar EC2 `running`, **RDS `available`**, SGs y tags vía `describe-*`
+- [ ] 7.4 Verificar idempotencia: re-ejecutar `provision.sh` y confirmar que NO crea recursos nuevos (ni EC2 ni RDS)
+- [ ] 7.5 Verificar estado posterior y, si la corrida fue de prueba, restaurar con `teardown.sh --yes` (incluye borrar RDS)
 - [ ] 7.6 Crear el reporte en `openspec/changes/monitoreo-cloud-mvp/reports/AAAA-MM-DD-step-7-pruebas-y-verificacion.md`
 
 ## 8. Step N+2 — Verificación manual según stack (OBLIGATORIO — EL AGENTE EJECUTA)
 
 - [ ] 8.1 **CLI/infra**: ejecutar `provision.sh` (válido) y un caso inválido (tipo ≠ `t2.micro`); verificar salida y códigos de retorno; restaurar con `teardown.sh`
-- [ ] 8.2 **n8n**: en la EC2, `docker compose up -d`, abrir UI (basic auth), ejecutar el workflow manualmente y confirmar 2xx de Grafana Cloud
+- [ ] 8.2 **n8n + RDS**: en la EC2, `docker compose up -d`, confirmar conexión a RDS en logs, abrir UI (basic auth), ejecutar el workflow manualmente y confirmar 2xx de Grafana Cloud
 - [ ] 8.3 **Datos/observabilidad**: confirmar que las métricas llegan al dashboard de Grafana y que la alerta dispara con un umbral de prueba
 - [ ] 8.4 **Costos**: ejecutar `aws ce get-cost-and-usage` y confirmar que el proyecto sigue en $0 / dentro de Free Tier
 - [ ] 8.5 Documentar comandos, salidas y restauración de estado en el reporte del Step N+1

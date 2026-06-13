@@ -23,11 +23,15 @@ cd scripts/aws
 
 ```bash
 ./provision.sh
-# Crea: key pair (.pem en ~/.monitoreo-cloud/), security group mínimo (22 y 5678 solo tu IP),
-#       rol IAM (CloudWatchReadOnlyAccess) + instance profile, y la EC2 t2.micro (Amazon Linux 2023).
-# Imprime InstanceId, IP pública y el comando SSH.
-./status.sh                              # verifica estado y costos
+# Crea: key pair (.pem en ~/.monitoreo-cloud/), security group de EC2 (22 y 5678 solo tu IP),
+#       security group de BD (5432 solo desde la EC2), rol IAM (CloudWatchReadOnlyAccess) +
+#       instance profile, EC2 t2.micro (Amazon Linux 2023) y RDS PostgreSQL db.t3.micro (Single-AZ).
+# Imprime InstanceId, IP pública, endpoint de RDS y el comando SSH.
+# La password de la BD, si se autogenera, queda en ~/.monitoreo-cloud/db-password.txt.
+./status.sh                              # verifica EC2, RDS, SGs y costos
 ```
+
+> RDS tarda ~5-10 min en quedar `available`; el script espera automáticamente.
 
 ## 3. Desplegar n8n en la EC2 (Docker Compose)
 
@@ -37,9 +41,11 @@ scp -i ~/.monitoreo-cloud/monitoreo-cloud-key.pem infra/docker-compose.yml ec2-u
 ssh -i ~/.monitoreo-cloud/monitoreo-cloud-key.pem ec2-user@<IP>
 
 # En la EC2:
-cp /ruta/.env.example .env && nano .env   # rellena usuario/clave/host/encryption key
+cp /ruta/.env.example .env && nano .env   # rellena basic auth, host, encryption key
+                                           # y DB_POSTGRESDB_HOST/USER/PASSWORD con los datos de RDS
 docker compose up -d
 docker compose ps                          # n8n debe estar 'running' en :5678
+docker compose logs n8n | grep -i database # confirma conexión a PostgreSQL (RDS) sin error
 ```
 
 Abre `http://<IP>:5678`, inicia sesión (basic auth) y completa el setup de n8n.

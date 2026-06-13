@@ -14,8 +14,13 @@ aws ec2 describe-instances --filters "${TAG_FILTER[@]}" \
   --query 'Reservations[].Instances[].{Id:InstanceId,Estado:State.Name,Tipo:InstanceType,IP:PublicIpAddress}' \
   --output table
 
+echo "== RDS PostgreSQL =="
+aws rds describe-db-instances --db-instance-identifier "$DB_INSTANCE_ID" \
+  --query 'DBInstances[].{Id:DBInstanceIdentifier,Estado:DBInstanceStatus,Clase:DBInstanceClass,Endpoint:Endpoint.Address}' \
+  --output table 2>/dev/null || warn "No hay RDS '${DB_INSTANCE_ID}' (o sin permisos)."
+
 echo "== Security groups =="
-aws ec2 describe-security-groups --filters "Name=group-name,Values=${SG_NAME}" \
+aws ec2 describe-security-groups --filters "Name=group-name,Values=${SG_NAME},${DB_SG_NAME}" \
   --query 'SecurityGroups[].{Id:GroupId,Nombre:GroupName}' --output table
 
 echo "== Budget =="

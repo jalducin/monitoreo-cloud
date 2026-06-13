@@ -37,6 +37,38 @@ NO MUST exponer SSH ni n8n a `0.0.0.0/0`.
 - **WHEN** se genera el key pair
 - **THEN** el archivo `.pem` se guarda con permisos restringidos fuera del árbol versionado y queda listado en `.gitignore`
 
+### Requirement: Provisión idempotente de RDS PostgreSQL (Free Tier)
+
+El sistema SHALL provisionar, mediante AWS CLI, una instancia de **RDS PostgreSQL** `db.t3.micro`,
+Single-AZ, 20 GB gp2, sin acceso público, en `us-east-2`, de forma idempotente. El tipo de instancia
+NO MUST salir de los tipos elegibles de Free Tier (`db.t3.micro`/`db.t4g.micro`) salvo override explícito.
+La base de datos SHALL ser accesible **solo** desde el security group de la EC2 (puerto 5432).
+
+#### Scenario: Primera provisión de la BD
+
+- **WHEN** el operador ejecuta el script de provisión y no existe una instancia RDS con el identificador del proyecto
+- **THEN** se crea una RDS PostgreSQL `db.t3.micro` Single-AZ, sin acceso público, etiquetada con `Project=monitoreo-cloud`, y el script reporta su endpoint
+
+#### Scenario: Re-ejecución idempotente
+
+- **WHEN** ya existe la instancia RDS del proyecto
+- **THEN** el script no crea otra y reporta el endpoint existente
+
+#### Scenario: Acceso de red restringido
+
+- **WHEN** se revisan las reglas del security group de la BD
+- **THEN** el puerto 5432 solo admite tráfico desde el security group de la EC2 del proyecto, no desde `0.0.0.0/0`
+
+#### Scenario: Tipo fuera de Free Tier
+
+- **WHEN** se intenta provisionar con una clase de instancia distinta de `db.t3.micro`/`db.t4g.micro`
+- **THEN** el script aborta explicando el límite de Free Tier, salvo override explícito
+
+#### Scenario: Credenciales de la BD seguras
+
+- **WHEN** se crea la instancia RDS
+- **THEN** la contraseña maestra se toma de una variable de entorno/secreto y nunca se imprime ni se versiona
+
 ### Requirement: Guardarraíles de costo (budget y alerta de billing)
 
 El sistema SHALL crear un AWS Budget de **1 USD** mensual con alerta por correo al superar el umbral, y
@@ -54,14 +86,14 @@ SHALL documentar los comandos para revisar el gasto (`aws ce get-cost-and-usage`
 
 ### Requirement: Teardown completo
 
-El sistema SHALL proveer un script de teardown que elimina todos los recursos creados (instancia, security
-group, key pair y, opcionalmente, el budget), filtrando por los tags del proyecto, y MUST pedir confirmación
-explícita o el flag `--yes` antes de destruir.
+El sistema SHALL proveer un script de teardown que elimina todos los recursos creados (instancia EC2,
+**instancia RDS**, security groups, key pair, rol IAM y, opcionalmente, el budget), filtrando por los
+tags/identificadores del proyecto, y MUST pedir confirmación explícita o el flag `--yes` antes de destruir.
 
 #### Scenario: Teardown con confirmación
 
 - **WHEN** el operador ejecuta el teardown con `--yes`
-- **THEN** se terminan/eliminan los recursos con el tag `Project=monitoreo-cloud` y el script verifica con `describe-*` que ya no existen
+- **THEN** se terminan/eliminan los recursos con el tag `Project=monitoreo-cloud` (incluida la RDS, omitiendo snapshot final) y el script verifica con `describe-*` que ya no existen
 
 #### Scenario: Teardown sin recursos
 

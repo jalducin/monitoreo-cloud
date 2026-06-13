@@ -35,7 +35,25 @@ else
   ok "No hay instancias que terminar."
 fi
 
-# --- Security group ----------------------------------------------------------
+# --- RDS PostgreSQL (sin snapshot final) -------------------------------------
+DB_STATUS="$(find_rds_status)"
+if [[ -n "$DB_STATUS" && "$DB_STATUS" != "None" ]]; then
+  log "Eliminando RDS '${DB_INSTANCE_ID}' (sin snapshot final)..."
+  aws rds delete-db-instance --db-instance-identifier "$DB_INSTANCE_ID" \
+    --skip-final-snapshot --delete-automated-backups >/dev/null
+  aws rds wait db-instance-deleted --db-instance-identifier "$DB_INSTANCE_ID"
+  ok "RDS eliminada."
+else
+  ok "No hay RDS que eliminar."
+fi
+
+# --- Security groups (BD primero por la referencia de origen, luego EC2) ------
+DB_SG_ID="$(aws ec2 describe-security-groups --filters "Name=group-name,Values=${DB_SG_NAME}" \
+           --query 'SecurityGroups[0].GroupId' --output text 2>/dev/null || echo None)"
+if [[ -n "$DB_SG_ID" && "$DB_SG_ID" != "None" ]]; then
+  aws ec2 delete-security-group --group-id "$DB_SG_ID" >/dev/null 2>&1 \
+    && ok "Security group de BD ${DB_SG_ID} eliminado." || warn "No se pudo eliminar el SG de BD."
+fi
 SG_ID="$(aws ec2 describe-security-groups --filters "Name=group-name,Values=${SG_NAME}" \
         --query 'SecurityGroups[0].GroupId' --output text 2>/dev/null || echo None)"
 if [[ -n "$SG_ID" && "$SG_ID" != "None" ]]; then
