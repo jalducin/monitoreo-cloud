@@ -1,0 +1,27 @@
+{
+  "uid": "monitoreo-cloud",
+  "title": "Monitoreo Cloud",
+  "tags": ["monitoreo-cloud"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "1m",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "CPU EC2 (%)",
+      "type": "timeseries",
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "ffp1jbaozykn4f" },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "percent" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT ts AS \"time\", value, metric_name AS metric FROM metrics WHERE $__timeFilter(ts) ORDER BY ts"
+        }
+      ]
+    }
+  ]
+}

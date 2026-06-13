@@ -21,6 +21,7 @@ SG_NAME="${SG_NAME:-monitoreo-cloud-sg}"
 IAM_ROLE_NAME="${IAM_ROLE_NAME:-monitoreo-cloud-ec2-role}"
 IAM_PROFILE_NAME="${IAM_PROFILE_NAME:-monitoreo-cloud-ec2-profile}"
 N8N_PORT="${N8N_PORT:-5678}"
+GRAFANA_PORT="${GRAFANA_PORT:-3000}"
 # --- RDS PostgreSQL (Free Tier: db.t3.micro, Single-AZ, 20 GB, 12 meses) ---
 DB_SG_NAME="${DB_SG_NAME:-monitoreo-cloud-db-sg}"
 DB_INSTANCE_ID="${DB_INSTANCE_ID:-monitoreo-cloud-db}"

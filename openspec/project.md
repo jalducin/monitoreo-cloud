@@ -5,9 +5,9 @@
 ## Qué es
 
 Sistema de monitoreo en tiempo real que recolecta métricas de AWS CloudWatch, las
-transforma/enriquece con **n8n** (orquestador self-hosted en EC2) y las visualiza en
-**Grafana Cloud**. Proyecto de portafolio que demuestra automatización, observabilidad y
-arquitectura cloud usando exclusivamente planes gratuitos (AWS Free Tier + Grafana Cloud free).
+transforma/enriquece con **n8n** (orquestador self-hosted en EC2), las guarda en **PostgreSQL** y
+las visualiza en **Grafana self-hosted**. Proyecto de portafolio que demuestra automatización,
+observabilidad y arquitectura cloud usando AWS Free Tier (cómputo) + software self-hosted gratuito.
 
 ## Stack tecnológico
 
@@ -15,7 +15,7 @@ arquitectura cloud usando exclusivamente planes gratuitos (AWS Free Tier + Grafa
 - Cómputo: **AWS EC2 t3.micro** (750 hrs/mes Free Tier)
 - Métricas y logs: **AWS CloudWatch** (10 métricas custom, 5 GB logs Free Tier)
 - Eventos / disparadores: **AWS Lambda** (1M requests/mes Free Tier) — opcional
-- Visualización: **Grafana Cloud** (free: 3 usuarios, 10k series de métricas)
+- Visualización: **Grafana** (self-hosted en contenedor, datasource PostgreSQL)
 - Capa AI (Fase 5, opcional): **OpenAI** dentro de créditos gratuitos, vía nodo n8n
 - Infra como código / despliegue: **AWS CLI** + scripts bash/PowerShell; **Docker Compose** en EC2
 - Contenedores: Docker / Docker Compose
@@ -25,9 +25,9 @@ arquitectura cloud usando exclusivamente planes gratuitos (AWS Free Tier + Grafa
 Pipeline de observabilidad (pull-based):
 
 ```
-AWS CloudWatch  ──>  n8n (EC2 t3.micro, Docker)  ──>  Grafana Cloud
-  métricas/logs       jala cada X min,                 dashboards +
-                      transforma y enriquece           alertas
+AWS CloudWatch  ──>  n8n (EC2 t3.micro)  ──>  PostgreSQL  ──>  Grafana (self-hosted)
+  métricas/logs       jala cada X min            tabla            dashboards +
+                      transforma e inserta       `metrics`        alertas
 ```
 
 Fase 5 (opcional) inserta análisis de anomalías con OpenAI entre n8n y la alerta inteligente.

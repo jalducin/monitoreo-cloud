@@ -50,15 +50,36 @@ services:
       - DB_POSTGRESDB_PASSWORD=${DB_POSTGRESDB_PASSWORD}
       # --- Región AWS para nodos que usen el rol IAM de la instancia ---
       - AWS_REGION=${AWS_REGION:-us-east-2}
-      # --- Endpoint/credenciales de Grafana Cloud se configuran en el credential store de n8n,
-      #     NO aquí (ver docs/DEPLOY.md). ---
+      # --- n8n inserta las métricas en la tabla 'metrics' de este mismo PostgreSQL
+      #     (nodo Postgres del workflow); Grafana la lee como datasource. ---
     volumes:
       - n8n_data:/home/node/.n8n
     # Límite acorde a t3.micro (1 vCPU / 1 GB). Con swap evita OOM dejando margen a postgres + host.
-    mem_limit: 600m
+    mem_limit: 500m
+
+  grafana:
+    image: grafana/grafana-oss:11.3.1   # versión fijada (no 'latest')
+    container_name: grafana
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://${N8N_HOST}:3000
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+    mem_limit: 300m
 
 volumes:
   n8n_data:
     driver: local
   pg_data:
+    driver: local
+  grafana_data:
     driver: local

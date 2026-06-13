@@ -1,15 +1,15 @@
 # 📊 Monitoreo Cloud — n8n + Grafana + AWS Free Tier
 
 > Pipeline de observabilidad **serverless-friendly** que recolecta métricas de AWS CloudWatch,
-> las orquesta con **n8n** (self-hosted en EC2) y las visualiza en **Grafana Cloud** —
-> 100% sobre planes gratuitos. Proyecto de portafolio.
+> las orquesta con **n8n** (self-hosted en EC2), las guarda en **PostgreSQL** y las visualiza en
+> **Grafana** (self-hosted) — 100% gratis, sin servicios externos. Proyecto de portafolio.
 >
 > **Estado:** MVP en desarrollo (Fases 1–4). · Alcance funcional: ver
 > [`openspec/changes/monitoreo-cloud-mvp/`](openspec/changes/monitoreo-cloud-mvp/).
 
 ## 🎯 Qué resuelve
 
-- Monitoreo en tiempo real de infraestructura AWS **sin costo** (AWS Free Tier + Grafana Cloud free).
+- Monitoreo en tiempo real de infraestructura AWS **sin costo** (AWS Free Tier + software self-hosted).
 - Recolección **automatizada** de métricas con workflows low-code (n8n), sin scripts ad-hoc.
 - Dashboards operativos y alertas, demostrando observabilidad y cloud automation.
 
@@ -23,14 +23,15 @@
                     ▼
 ┌───────────────────────────────────────────────────────────────┐
 │  n8n  — EC2 t3.micro (Amazon Linux 2023, Docker Compose)        │
-│  Schedule → CloudWatch → transforma (Prometheus) → HTTP push    │
-│  persistencia ↔ PostgreSQL en contenedor (volumen persistente)  │
+│  Schedule → CloudWatch → normaliza → INSERT en Postgres         │
 └───────────────────────────────────────────────────────────────┘
-                    │  remote write (HTTPS + token)
+                    │  escribe en tabla `metrics`
                     ▼
 ┌───────────────────────────────────────────────────────────────┐
-│  Grafana Cloud  — dashboards en tiempo real + alertas           │
+│  PostgreSQL (contenedor)  ←─ datasource ─→  Grafana (contenedor)│
+│  volumen persistente                         dashboards + alertas│
 └───────────────────────────────────────────────────────────────┘
+        (todo en la misma EC2 · puertos solo a la IP del operador)
 ```
 
 Detalle de decisiones técnicas: [`openspec/changes/monitoreo-cloud-mvp/design.md`](openspec/changes/monitoreo-cloud-mvp/design.md).
@@ -43,7 +44,7 @@ Detalle de decisiones técnicas: [`openspec/changes/monitoreo-cloud-mvp/design.m
 | Base de datos | PostgreSQL 16 en contenedor (backend de n8n, volumen persistente) | $0 indefinido |
 | Métricas / logs | AWS CloudWatch | 10 métricas custom · 5 GB logs |
 | Orquestación / ETL | n8n (Docker) | self-hosted |
-| Visualización | Grafana Cloud | free (3 usuarios · 10k series) |
+| Visualización | Grafana (self-hosted, contenedor) | $0 indefinido |
 | Despliegue | AWS CLI + bash · Docker Compose | — |
 | Costo (guardarraíl) | AWS Budgets | alerta a $1 USD |
 
@@ -52,7 +53,7 @@ Detalle de decisiones técnicas: [`openspec/changes/monitoreo-cloud-mvp/design.m
 - AWS CLI v2 autenticado (`aws sts get-caller-identity`), región `us-east-2`.
 - `bash` y `curl` en la máquina del operador.
 - Docker / Docker Compose (se instalan en la EC2 vía user-data).
-- Cuenta gratuita de Grafana Cloud (alta manual).
+- Sin cuentas externas: n8n, PostgreSQL y Grafana corren self-hosted en la EC2.
 
 ## 🚀 Configuración (quickstart)
 
@@ -114,7 +115,7 @@ Flujo guiado por especificaciones (OpenSpec): rama `feature/*` → `proposal` �
 ## 💼 Para CV / LinkedIn
 
 > Diseñé e implementé un sistema de monitoreo en tiempo real sobre AWS Free Tier, usando n8n como
-> orquestador de pipelines de datos y Grafana Cloud para visualización. Integra métricas de CloudWatch,
+> orquestador de pipelines de datos y Grafana self-hosted para visualización. Integra métricas de CloudWatch,
 > automatiza la recolección con workflows low-code y genera dashboards y alertas operativas —
 > demostrando observabilidad, cloud automation y arquitectura serverless, con guardarraíles de costo
 > (infra como código idempotente y teardown reproducible).

@@ -11,7 +11,7 @@
     dentro de la EC2 → costo $0 indefinido.
   - CloudWatch: 10 métricas custom, 10 alarmas, 5 GB de logs ingeridos.
   - Lambda: 1M requests/mes + 400k GB-s.
-  - Grafana Cloud free: 3 usuarios, 10k series de métricas, 14 días de retención.
+  - Grafana: self-hosted en contenedor (no Grafana Cloud), datasource = el PostgreSQL local. $0 indefinido.
 - **Región única**: `us-east-2` (coincide con la cuenta configurada). No crear recursos en otras regiones.
 - **Etiquetado obligatorio** en todo recurso AWS: `Project=monitoreo-cloud`, `Env=free-tier`,
   `ManagedBy=cli`. Permite filtrar costos y limpiar.

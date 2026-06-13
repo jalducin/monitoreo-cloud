@@ -46,18 +46,24 @@ docker compose logs n8n | grep -i migration # confirma que n8n aplicó migracion
 
 Abre `http://<IP>:5678`, inicia sesión (basic auth) y completa el setup de n8n.
 
-## 4. Grafana Cloud (pasos manuales)
+## 4. Grafana self-hosted (en el mismo compose)
 
-1. Crea cuenta free en https://grafana.com/ y un stack.
-2. En **Connections → Prometheus (remote write)**: copia URL, *user* (instance id) y genera **API token**.
-3. En n8n, crea una credencial HTTP (Basic Auth) con esos valores (queda cifrada en el volumen).
+Grafana ya arranca con `docker compose up -d` (servicio `grafana`, puerto 3000). Bootstrap por API/provisioning:
+
+1. Abre `http://<IP>:3000` y entra con el admin del `.env` (`GF_SECURITY_ADMIN_USER/PASSWORD`).
+2. Datasource **PostgreSQL** → host `postgres:5432`, db `n8n`, user/clave del `.env` (`sslmode=disable`).
+   Reproducible vía `grafana/provisioning/datasources/postgres.yml`.
+3. (Opcional) genera un **service-account token** (Administration → Service accounts) para automatizar dashboards.
+4. Crea la tabla destino en Postgres:
+   `docker exec -i n8n-postgres psql -U $POSTGRES_USER -d $POSTGRES_DB < <(echo "CREATE TABLE IF NOT EXISTS metrics (...)" )`
+   (esquema completo en `n8n/workflows/README.md`).
 
 ## 5. Pipeline y dashboards
 
-1. Construye el workflow `metricas-cloudwatch-grafana` (ver `n8n/workflows/README.md`), ejecútalo
-   manualmente y confirma respuesta 2xx de Grafana.
-2. Expórtalo **sin credenciales** a `n8n/workflows/metricas-cloudwatch-grafana.json`.
-3. En Grafana Cloud crea el dashboard (ver `grafana/README.md`), expórtalo a `grafana/dashboards/`.
+1. Construye el workflow `metricas-cloudwatch-postgres` (ver `n8n/workflows/README.md`), ejecútalo
+   manualmente y confirma que aparecen filas en la tabla `metrics`.
+2. Expórtalo **sin credenciales** a `n8n/workflows/metricas-cloudwatch-postgres.json`.
+3. Crea/ajusta el dashboard en Grafana (datasource PostgreSQL), expórtalo a `grafana/provisioning/dashboards/json/`.
 4. Configura la alerta de CPU y su contact point.
 
 ## 6. Verificación

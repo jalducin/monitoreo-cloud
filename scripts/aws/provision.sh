@@ -50,7 +50,7 @@ else
 fi
 
 # Reglas de entrada idempotentes (ignora error si ya existen).
-for port in 22 "$N8N_PORT"; do
+for port in 22 "$N8N_PORT" "$GRAFANA_PORT"; do
   aws ec2 authorize-security-group-ingress --group-id "$SG_ID" \
     --protocol tcp --port "$port" --cidr "$OPERATOR_IP" >/dev/null 2>&1 \
     && ok "Regla agregada: tcp/${port} desde ${OPERATOR_IP}" \

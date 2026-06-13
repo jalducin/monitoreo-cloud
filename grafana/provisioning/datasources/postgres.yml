@@ -1,0 +1,17 @@
+# Datasource de Grafana (self-hosted) → PostgreSQL del compose.
+# Reproducible: montar grafana/provisioning en /etc/grafana/provisioning.
+# La password se inyecta por variable de entorno (no se versiona el valor).
+apiVersion: 1
+datasources:
+  - name: PostgreSQL
+    type: postgres
+    access: proxy
+    url: postgres:5432
+    user: $POSTGRES_USER
+    database: $POSTGRES_DB
+    isDefault: true
+    secureJsonData:
+      password: $POSTGRES_PASSWORD
+    jsonData:
+      sslmode: disable
+      postgresVersion: 1600

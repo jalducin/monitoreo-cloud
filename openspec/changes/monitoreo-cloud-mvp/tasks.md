@@ -13,7 +13,7 @@
 - [ ] 1.1 Crear estructura: `infra/`, `scripts/aws/`, `n8n/workflows/`, `grafana/`, `docs/`
 - [ ] 1.2 Crear `README.md` del proyecto (arquitectura, stack, quickstart, Free Tier) según plantilla del README base
 - [ ] 1.3 Crear `.env.example` (variables n8n/Grafana sin valores reales) y documentar su uso
-- [ ] 1.4 Crear `docs/DEPLOY.md` con el runbook de despliegue y los pasos manuales de Grafana Cloud
+- [ ] 1.4 Crear `docs/DEPLOY.md` con el runbook de despliegue (infra + stack Docker + Grafana self-hosted)
 
 ## 2. infra-aws-free-tier — provisión y guardarraíles (AWS CLI)
 
@@ -36,18 +36,20 @@
 
 ## 4. metrics-pipeline — workflow n8n
 
-- [ ] 4.1 Crear workflow n8n: trigger cron (intervalo conservador documentado, dentro de Free Tier)
-- [ ] 4.2 Nodo de extracción de métricas CloudWatch (CPU del EC2) usando el rol IAM de la instancia
-- [ ] 4.3 Nodo de transformación al formato de remote write de Grafana Cloud (Prometheus): métrica, valor, timestamp, labels
-- [ ] 4.4 Nodo HTTP Request a Grafana Cloud (token desde credential store) con reintento/notificación ante fallo
-- [ ] 4.5 Exportar workflow a `n8n/workflows/metricas-cloudwatch-grafana.json` **sin credenciales**
+- [ ] 4.1 Crear tabla `metrics` en PostgreSQL (columnas ts, metric_name, value, instance_id, region, labels + índices)
+- [ ] 4.2 Crear workflow n8n: trigger cron (intervalo conservador documentado, dentro de Free Tier)
+- [ ] 4.3 Nodo de extracción de métricas CloudWatch (CPU del EC2) usando el rol IAM de la instancia
+- [ ] 4.4 Nodo de transformación: normalizar a filas (metric_name, value, ts, instance_id, region)
+- [ ] 4.5 Nodo Postgres (Insert) a la tabla `metrics` con reintento/notificación ante fallo
+- [ ] 4.6 Exportar workflow a `n8n/workflows/metricas-cloudwatch-postgres.json` **sin credenciales**
 
-## 5. grafana-dashboards — dashboards y alertas
+## 5. grafana-dashboards — Grafana self-hosted, datasource Postgres
 
-- [ ] 5.1 Crear dashboard con paneles de CPU y memoria del EC2; exportar definición a `grafana/dashboards/`
-- [ ] 5.2 Añadir panel de invocaciones Lambda y panel de errores/logs (documentar como opcional si no hay métricas)
-- [ ] 5.3 Configurar al menos una alerta (CPU alta sostenida) con canal email/webhook; documentar umbral y canal
-- [ ] 5.4 Versionar definiciones en `grafana/` sin tokens ni secretos embebidos
+- [ ] 5.1 Servicio `grafana` en el compose (imagen fijada, puerto 3000, admin por env, mem_limit) + puerto 3000 en el SG (solo IP operador)
+- [ ] 5.2 Provisionar datasource PostgreSQL y generar service-account token (vía provisioning/API)
+- [ ] 5.3 Crear dashboard con panel(es) de CPU (y memoria/Lambda según disponibilidad) leyendo de la tabla `metrics`; versionar JSON en `grafana/`
+- [ ] 5.4 Configurar al menos una alerta (CPU alta sostenida) con canal email/webhook; documentar umbral y canal
+- [ ] 5.5 Verificar que no se versionan tokens ni secretos (provisioning usa `$POSTGRES_PASSWORD`)
 
 ## 6. Step N — Revisar y preparar verificaciones (OBLIGATORIO)
 
@@ -67,7 +69,7 @@
 ## 8. Step N+2 — Verificación manual según stack (OBLIGATORIO — EL AGENTE EJECUTA)
 
 - [ ] 8.1 **CLI/infra**: ejecutar `provision.sh` (válido) y un caso inválido (tipo no free-tier-eligible); verificar salida y códigos de retorno; restaurar con `teardown.sh`
-- [ ] 8.2 **n8n + postgres**: en la EC2, `docker compose up -d`, confirmar `postgres healthy` y migraciones de n8n en logs, abrir UI, ejecutar el workflow manualmente y confirmar 2xx de Grafana Cloud
+- [ ] 8.2 **n8n + postgres + grafana**: en la EC2, `docker compose up -d`, confirmar `postgres healthy`, n8n con migraciones y Grafana arriba; ejecutar el workflow y confirmar filas en `metrics` y panel en Grafana
 - [ ] 8.3 **Datos/observabilidad**: confirmar que las métricas llegan al dashboard de Grafana y que la alerta dispara con un umbral de prueba
 - [ ] 8.4 **Costos**: ejecutar `aws ce get-cost-and-usage` y confirmar que el proyecto sigue en $0 / dentro de Free Tier
 - [ ] 8.5 Documentar comandos, salidas y restauración de estado en el reporte del Step N+1

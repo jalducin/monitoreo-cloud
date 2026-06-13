@@ -16,29 +16,30 @@ La frecuencia MUST elegirse para no exceder los límites del Free Tier de CloudW
 - **WHEN** se revisa la configuración del cron del workflow
 - **THEN** el intervalo documentado mantiene el número de llamadas y métricas dentro de los límites gratuitos de CloudWatch
 
-### Requirement: Transformación al formato de Grafana
+### Requirement: Normalización de los datapoints
 
-El sistema SHALL transformar los datapoints de CloudWatch al formato esperado por Grafana Cloud
-(p. ej. payload de remote write / API de métricas), conservando timestamp, nombre de métrica y labels.
+El sistema SHALL transformar los datapoints de CloudWatch a filas con las columnas de la tabla `metrics`:
+`metric_name`, `value`, `ts`, `instance_id`, `region` (y opcionalmente `labels`).
 
 #### Scenario: Transformación correcta
 
 - **WHEN** el workflow recibe datapoints de CloudWatch
-- **THEN** produce un payload con el nombre de métrica, valor, timestamp y labels en el formato que Grafana Cloud acepta
+- **THEN** produce, por cada datapoint, una fila con `metric_name`, `value` numérico, `ts` y los identificadores de instancia/región
 
-### Requirement: Envío a Grafana Cloud con manejo de error
+### Requirement: Persistencia en PostgreSQL con manejo de error
 
-El sistema SHALL enviar las métricas transformadas a Grafana Cloud mediante su API/endpoint autenticado y
-MUST manejar los fallos de envío con reintento o notificación, sin perder silenciosamente datos.
+El sistema SHALL insertar las métricas normalizadas en la tabla `metrics` del PostgreSQL del compose
+(nodo Postgres de n8n) y MUST manejar los fallos de inserción con reintento o notificación, sin perder
+silenciosamente datos. Grafana lee esa tabla como datasource (no se usa Grafana Cloud ni remote write).
 
-#### Scenario: Envío exitoso
+#### Scenario: Inserción exitosa
 
-- **WHEN** el payload se envía a Grafana Cloud y la API responde 2xx
-- **THEN** el workflow marca la ejecución como exitosa y las métricas quedan disponibles en Grafana
+- **WHEN** el workflow inserta las filas en la tabla `metrics`
+- **THEN** las filas quedan disponibles en PostgreSQL y el dashboard de Grafana las muestra
 
-#### Scenario: Fallo de envío
+#### Scenario: Fallo de inserción
 
-- **WHEN** la API de Grafana Cloud responde con error o no responde
+- **WHEN** la inserción en PostgreSQL falla (BD no disponible, error de conexión)
 - **THEN** el workflow reintenta según su política y, si persiste, registra/notifica el fallo en lugar de ignorarlo
 
 ### Requirement: Workflow versionado sin credenciales
