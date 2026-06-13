@@ -39,37 +39,21 @@ NO MUST exponer SSH ni n8n a `0.0.0.0/0`.
 - **WHEN** se genera el key pair
 - **THEN** el archivo `.pem` se guarda con permisos restringidos fuera del árbol versionado y queda listado en `.gitignore`
 
-### Requirement: Provisión idempotente de RDS PostgreSQL (Free Tier)
+### Requirement: Sin base de datos gestionada (persistencia en contenedor)
 
-El sistema SHALL provisionar, mediante AWS CLI, una instancia de **RDS PostgreSQL** `db.t3.micro`,
-Single-AZ, 20 GB gp2, sin acceso público, en `us-east-2`, de forma idempotente. El tipo de instancia
-NO MUST salir de los tipos elegibles de Free Tier (`db.t3.micro`/`db.t4g.micro`) salvo override explícito.
-La base de datos SHALL ser accesible **solo** desde el security group de la EC2 (puerto 5432).
+Para mantener el costo en **$0 indefinido**, el sistema NO MUST provisionar una base de datos
+gestionada (RDS). La persistencia de n8n vive en un contenedor PostgreSQL dentro de la EC2
+(ver capability `n8n-host`). Si existiera una RDS previa del proyecto, el teardown SHALL poder eliminarla.
 
-#### Scenario: Primera provisión de la BD
+#### Scenario: La provisión no crea RDS
 
-- **WHEN** el operador ejecuta el script de provisión y no existe una instancia RDS con el identificador del proyecto
-- **THEN** se crea una RDS PostgreSQL `db.t3.micro` Single-AZ, sin acceso público, etiquetada con `Project=monitoreo-cloud`, y el script reporta su endpoint
+- **WHEN** el operador ejecuta el script de provisión
+- **THEN** no se crea ninguna instancia RDS ni security group de BD; la única base de datos es el contenedor en la EC2
 
-#### Scenario: Re-ejecución idempotente
+#### Scenario: Limpieza de una RDS heredada
 
-- **WHEN** ya existe la instancia RDS del proyecto
-- **THEN** el script no crea otra y reporta el endpoint existente
-
-#### Scenario: Acceso de red restringido
-
-- **WHEN** se revisan las reglas del security group de la BD
-- **THEN** el puerto 5432 solo admite tráfico desde el security group de la EC2 del proyecto, no desde `0.0.0.0/0`
-
-#### Scenario: Tipo fuera de Free Tier
-
-- **WHEN** se intenta provisionar con una clase de instancia distinta de `db.t3.micro`/`db.t4g.micro`
-- **THEN** el script aborta explicando el límite de Free Tier, salvo override explícito
-
-#### Scenario: Credenciales de la BD seguras
-
-- **WHEN** se crea la instancia RDS
-- **THEN** la contraseña maestra se toma de una variable de entorno/secreto y nunca se imprime ni se versiona
+- **WHEN** existe una RDS previa con el identificador del proyecto y se ejecuta el teardown
+- **THEN** el teardown la elimina (sin snapshot final) junto con el resto de recursos
 
 ### Requirement: Guardarraíles de costo (budget y alerta de billing)
 

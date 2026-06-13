@@ -24,28 +24,24 @@ cd scripts/aws
 ```bash
 ./provision.sh
 # Crea: key pair (.pem en ~/.monitoreo-cloud/), security group de EC2 (22 y 5678 solo tu IP),
-#       security group de BD (5432 solo desde la EC2), rol IAM (CloudWatchReadOnlyAccess) +
-#       instance profile, EC2 t3.micro (Amazon Linux 2023) y RDS PostgreSQL db.t3.micro (Single-AZ).
-# Imprime InstanceId, IP pública, endpoint de RDS y el comando SSH.
-# La password de la BD, si se autogenera, queda en ~/.monitoreo-cloud/db-password.txt.
-./status.sh                              # verifica EC2, RDS, SGs y costos
+#       rol IAM (CloudWatchReadOnlyAccess) + instance profile y EC2 t3.micro (Amazon Linux 2023).
+# Imprime InstanceId, IP pública y el comando SSH. (La base de datos NO usa RDS: corre en contenedor.)
+./status.sh                              # verifica EC2, SG y costos
 ```
 
-> RDS tarda ~5-10 min en quedar `available`; el script espera automáticamente.
-
-## 3. Desplegar n8n en la EC2 (Docker Compose)
+## 3. Desplegar n8n + PostgreSQL en la EC2 (Docker Compose)
 
 ```bash
 # Copia el compose y crea el .env en la instancia (NO se versiona):
-scp -i ~/.monitoreo-cloud/monitoreo-cloud-key.pem infra/docker-compose.yml ec2-user@<IP>:~/
+scp -i ~/.monitoreo-cloud/monitoreo-cloud-key.pem infra/docker-compose.yml ec2-user@<IP>:~/monitoreo/
 ssh -i ~/.monitoreo-cloud/monitoreo-cloud-key.pem ec2-user@<IP>
 
-# En la EC2:
-cp /ruta/.env.example .env && nano .env   # rellena basic auth, host, encryption key
-                                           # y DB_POSTGRESDB_HOST/USER/PASSWORD con los datos de RDS
+# En la EC2 (~/monitoreo):
+cp /ruta/.env.example .env && nano .env   # basic auth, N8N_HOST=<IP>, encryption key,
+                                           # y POSTGRES_*/DB_POSTGRESDB_* (la BD es el contenedor 'postgres')
 docker compose up -d
-docker compose ps                          # n8n debe estar 'running' en :5678
-docker compose logs n8n | grep -i database # confirma conexión a PostgreSQL (RDS) sin error
+docker compose ps                          # 'postgres' healthy y 'n8n' running en :5678
+docker compose logs n8n | grep -i migration # confirma que n8n aplicó migraciones en PostgreSQL
 ```
 
 Abre `http://<IP>:5678`, inicia sesión (basic auth) y completa el setup de n8n.

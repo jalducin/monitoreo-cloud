@@ -1,31 +1,37 @@
 ## ADDED Requirements
 
-### Requirement: n8n self-hosted con Docker Compose y backend PostgreSQL
+### Requirement: n8n self-hosted con Docker Compose y backend PostgreSQL en contenedor
 
 El sistema SHALL ejecutar n8n en la EC2 mediante Docker Compose, usando una imagen con versión fijada
-(no `latest`) y configurado con `DB_TYPE=postgresdb` apuntando a la instancia de **AWS RDS PostgreSQL**
-del proyecto, de modo que workflows y credenciales persistan en la base de datos gestionada y
-sobrevivan a la recreación o reemplazo del contenedor y de la EC2.
+(no `latest`) y configurado con `DB_TYPE=postgresdb` apuntando a un **contenedor de PostgreSQL** que
+corre en el mismo `docker compose` (servicio `postgres`, imagen de versión fijada), con un volumen
+persistente para los datos de la BD, de modo que workflows y credenciales sobrevivan a la recreación
+del contenedor de n8n. La elección de contenedor (en vez de RDS) mantiene el costo en **$0 indefinido**.
 
 #### Scenario: Arranque del stack
 
-- **WHEN** el operador ejecuta `docker compose up -d` en la EC2 con las variables de conexión a RDS definidas
-- **THEN** el contenedor de n8n queda en estado `running`, conecta a la BD PostgreSQL de RDS y la UI responde en el puerto 5678
+- **WHEN** el operador ejecuta `docker compose up -d` en la EC2
+- **THEN** arranca primero el contenedor `postgres` (healthcheck OK) y luego n8n, que conecta a esa BD y expone la UI en el puerto 5678
 
-#### Scenario: Persistencia tras recreación del contenedor o la EC2
+#### Scenario: Persistencia tras recreación del contenedor de n8n
 
-- **WHEN** el contenedor de n8n (o la propia EC2) se recrea y se vuelve a apuntar al mismo RDS
-- **THEN** los workflows y credenciales previamente guardados siguen presentes porque viven en RDS PostgreSQL
+- **WHEN** el contenedor de n8n se recrea apuntando al mismo servicio/volumen de PostgreSQL
+- **THEN** los workflows y credenciales previamente guardados siguen presentes porque viven en el volumen persistente de la BD
+
+#### Scenario: Dependencia de arranque
+
+- **WHEN** se levanta el stack
+- **THEN** n8n no arranca hasta que el contenedor `postgres` reporta `healthy` (vía `depends_on` + healthcheck)
 
 #### Scenario: Versión de imagen fijada
 
 - **WHEN** se revisa `docker-compose.yml`
-- **THEN** la imagen de n8n referencia una etiqueta de versión concreta y no `latest`
+- **THEN** las imágenes de n8n y de postgres referencian etiquetas de versión concretas y no `latest`
 
 #### Scenario: Credenciales de la BD fuera del repo
 
 - **WHEN** se inspecciona el repositorio y la configuración de n8n
-- **THEN** las credenciales de conexión a RDS provienen del `.env` del host (no versionado) o de un secreto, nunca de valores embebidos en el compose versionado
+- **THEN** las credenciales de la BD provienen del `.env` del host (no versionado), nunca de valores embebidos en el compose versionado
 
 ### Requirement: Manejo seguro de secretos
 

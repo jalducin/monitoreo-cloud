@@ -36,17 +36,20 @@ idempotentes (consultar por tag antes de crear) son suficientes y transparentes.
 n8n oficial recomienda Docker; Compose da arranque simple, versión fijada y configuración por entorno.
 **Alternativa descartada:** instalar n8n vía npm (más frágil, gestión de procesos manual).
 
-### D8 — Persistencia de n8n en AWS RDS PostgreSQL (no SQLite/volumen)
-n8n se configura con `DB_TYPE=postgresdb` apuntando a una RDS PostgreSQL `db.t3.micro` Single-AZ
-(20 GB, sin acceso público). Desacopla los datos del ciclo de vida del contenedor y de la EC2:
-si se recrea la instancia, los workflows y credenciales persisten en la BD gestionada (con backups
-automáticos de RDS). Encaja en Free Tier (12 meses, Single-AZ).
-**Alternativa descartada:** SQLite en volumen Docker (default de n8n) — simple, pero los datos viven
-en el disco de la EC2 y se pierden si se reemplaza la instancia; sin backups gestionados.
-**Trade-offs:** RDS free es solo 12 meses y añade una pieza más; mitigado fijando la clase a
-`db.t3.micro`, Single-AZ y teardown que borra la BD (sin snapshot final) para no incurrir en costo.
-**Seguridad:** la RDS no es pública; solo el security group de la EC2 puede alcanzarla en 5432; la
-contraseña maestra se toma de variable de entorno/secreto, nunca del repo.
+### D8 — Persistencia de n8n en PostgreSQL containerizado (no RDS, no SQLite)
+n8n se configura con `DB_TYPE=postgresdb` apuntando a un servicio `postgres` en el mismo
+`docker compose` (imagen fijada, volumen persistente), corriendo en la propia EC2.
+**Motivación (revisada):** el objetivo es **$0 indefinido** ("tier 0"). RDS Free Tier caduca a los
+12 meses (luego ~$13-15/mes); un contenedor Postgres en el `t3.micro` es gratis para siempre y
+conserva el mismo esquema/driver que RDS (migración trivial, solo cambia el host).
+**Alternativas descartadas:**
+- *RDS PostgreSQL* — gestionado y con backups, pero gratis solo 12 meses; sobra para un MVP de portafolio.
+- *SQLite (default n8n)* — lo más simple, pero menos robusto para concurrencia y respaldos.
+- *DynamoDB* — **no es opción**: n8n no soporta NoSQL como backend (solo SQLite/Postgres/MySQL).
+**Trade-offs:** sin backups gestionados (se documenta respaldo manual del volumen / `pg_dump`);
+consume ~150-200 MB de la RAM del `t3.micro` (mitigado con swap y límites de memoria en Compose).
+**Seguridad:** la BD no se expone fuera de la red de Docker; n8n la alcanza por el nombre de servicio;
+credenciales en el `.env` del host (no versionado).
 
 ### D3 — Grafana **Cloud** (no self-hosted)
 El `t3.micro` no soporta cómodamente n8n + Grafana + Prometheus. Grafana Cloud free externaliza
@@ -84,19 +87,19 @@ filtrar costos y para que el teardown encuentre todo.
 - **IP pública dinámica del operador rompe el SG** → mitigación: el script recalcula y actualiza la regla.
 - **Pasos manuales en Grafana Cloud (alta + token)** → mitigación: documentados paso a paso; el token
   se inyecta vía credential store, nunca al repo.
-- **Pérdida de datos de n8n al recrear contenedor/EC2** → mitigación: persistencia en RDS PostgreSQL
-  con backups automáticos; el contenedor es desechable.
-- **RDS fuera de Free Tier o costo tras 12 meses** → mitigación: clase fijada a `db.t3.micro` Single-AZ,
-  20 GB; guard que aborta con clases no elegibles; teardown borra la BD; budget+alerta vigilan el gasto.
+- **Pérdida de datos de n8n al recrear el contenedor** → mitigación: volumen persistente para PostgreSQL;
+  respaldo manual documentado (`pg_dump` / copia del volumen). El contenedor de n8n es desechable.
+- **OOM en el `t3.micro` con n8n + postgres (1 GB RAM)** → mitigación: swap de 2 GB en la EC2,
+  `mem_limit` en Compose, Grafana en la nube (no en el host).
+- **Sin backups gestionados (vs RDS)** → mitigación: `pg_dump` programado opcional; aceptable para un MVP de portafolio.
 
 ## Migration Plan
 
 Despliegue incremental (sin estado previo que migrar):
-1. `scripts/aws/provision.sh` → key pair, security groups (EC2 y BD), rol IAM, EC2 `t3.micro`,
-   **RDS PostgreSQL `db.t3.micro`**, tags.
+1. `scripts/aws/provision.sh` → key pair, security group (EC2), rol IAM, EC2 `t3.micro`, tags.
 2. `scripts/aws/budget.sh` → budget $1 + alerta.
-3. En la EC2: instalar Docker, subir `infra/docker-compose.yml` + `.env` (con datos de conexión a RDS),
-   `docker compose up -d` (n8n conecta a RDS).
+3. En la EC2: instalar Docker (+ swap), subir `infra/docker-compose.yml` + `.env`,
+   `docker compose up -d` (levanta `postgres` y luego n8n, que conecta al contenedor).
 4. Configurar credenciales en n8n (rol IAM ya disponible; token Grafana en credential store).
 5. Importar `n8n/workflows/*.json`, ejecutar y validar llegada de métricas a Grafana.
 6. Importar dashboard y alerta desde `grafana/`.

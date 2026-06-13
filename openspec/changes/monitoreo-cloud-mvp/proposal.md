@@ -12,9 +12,9 @@ provisión reproducible por CLI, recolección automatizada de métricas y visual
   key pair, security group mínimo y etiquetado obligatorio (`Project/Env/ManagedBy`).
 - **Presupuesto de billing de $1 USD con alerta por correo** y comandos documentados para revisar gasto.
 - **n8n self-hosted** en la EC2 vía **Docker Compose**, con secretos fuera del repo.
-- **Persistencia en AWS RDS PostgreSQL** (`db.t3.micro`, Single-AZ, 20 GB — Free Tier 12 meses):
-  n8n usa Postgres como backend (`DB_TYPE=postgresdb`) en vez de SQLite, para datos durables y
-  desacoplados del ciclo de vida del contenedor/instancia.
+- **Persistencia en PostgreSQL containerizado** (servicio `postgres` en el mismo compose, volumen
+  persistente): n8n usa Postgres como backend (`DB_TYPE=postgresdb`) en vez de SQLite, manteniendo
+  el costo en **$0 indefinido** (sin RDS, cuyo Free Tier caduca a los 12 meses).
 - **Workflow n8n** que jala métricas de CloudWatch cada X minutos, las transforma/enriquece y las
   publica a **Grafana Cloud** (remote write / API), versionado como JSON **sin credenciales**.
 - **Dashboards y alertas en Grafana Cloud**: CPU EC2, memoria, invocaciones Lambda (si aplica),
@@ -27,10 +27,10 @@ provisión reproducible por CLI, recolección automatizada de métricas y visual
 
 ### New Capabilities
 - `infra-aws-free-tier`: provisión y limpieza idempotente por AWS CLI de la infraestructura base
-  (EC2 t3.micro, RDS PostgreSQL db.t3.micro, key pair, security groups, tags) y guardarraíles de costo
-  (budget $1 + alerta billing), garantizando permanencia dentro del Free Tier en `us-east-2`.
-- `n8n-host`: n8n self-hosted en la EC2 con Docker Compose, **persistencia en RDS PostgreSQL** y
-  manejo seguro de secretos (env/credential store, nunca en el repo).
+  (EC2 t3.micro, key pair, security group, tags) y guardarraíles de costo (budget $1 + alerta billing),
+  garantizando permanencia dentro del Free Tier en `us-east-2`.
+- `n8n-host`: n8n self-hosted en la EC2 con Docker Compose, **persistencia en PostgreSQL containerizado**
+  (volumen persistente) y manejo seguro de secretos (env/credential store, nunca en el repo).
 - `metrics-pipeline`: workflow n8n programado que extrae métricas de CloudWatch, las transforma al
   formato de Grafana y las envía a Grafana Cloud, con manejo de error/reintento e idempotencia.
 - `grafana-dashboards`: dashboards y alertas en Grafana Cloud sobre las métricas recibidas
@@ -44,9 +44,9 @@ provisión reproducible por CLI, recolección automatizada de métricas y visual
 - **Nuevo**: `infra/` (docker-compose de n8n), `scripts/aws/` (provisión/teardown/status/budget),
   `n8n/workflows/` (JSON exportado sin secretos), `grafana/` (dashboards/alertas como código),
   `README.md` del proyecto, `.gitignore` reforzado para secretos.
-- **AWS** (cuenta configurada, `us-east-2`): EC2, **RDS PostgreSQL**, CloudWatch, IAM mínimo, Budgets — todo Free Tier.
+- **AWS** (cuenta configurada, `us-east-2`): EC2, CloudWatch, IAM mínimo, Budgets — todo Free Tier (sin RDS).
 - **Servicios externos**: Grafana Cloud (cuenta free, paso manual de alta documentado).
 - **Dependencias**: Docker/Docker Compose en EC2, AWS CLI local, `gh` para el repo, n8n (imagen fijada).
-- **Riesgos**: salir del Free Tier (mitigado con budget+alerta+teardown; RDS free solo 12 meses y
-  Single-AZ — tipos fijados a `db.t3.micro`), exposición de secretos (mitigado con `.gitignore` +
-  export sin credenciales + security groups mínimos), credenciales de la BD (en `.env`/Secrets, nunca en repo).
+- **Riesgos**: salir del Free Tier (mitigado con budget+alerta+teardown; sin RDS para evitar el corte de
+  12 meses), OOM en el `t3.micro` con n8n+postgres (mitigado con swap + límites de memoria),
+  exposición de secretos (mitigado con `.gitignore` + export sin credenciales + security group mínimo).

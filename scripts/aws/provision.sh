@@ -9,9 +9,8 @@ source ./lib.sh
 
 require_aws
 guard_free_tier
-guard_free_tier_db
 ACCOUNT="$(account_id)"
-log "Cuenta AWS: ${ACCOUNT} · Región: ${AWS_REGION} · EC2: ${INSTANCE_TYPE} · RDS: ${DB_INSTANCE_CLASS}"
+log "Cuenta AWS: ${ACCOUNT} · Región: ${AWS_REGION} · EC2: ${INSTANCE_TYPE} · BD: PostgreSQL en contenedor"
 
 # --- Idempotencia: ¿ya hay instancia? ---------------------------------------
 EXISTING="$(find_instance)"
@@ -58,51 +57,8 @@ for port in 22 "$N8N_PORT"; do
     || warn "Regla tcp/${port} desde ${OPERATOR_IP} ya existía (o sin cambio)."
 done
 
-# --- Security group de la BD (5432 solo desde el SG de la EC2) ---------------
-DB_SG_ID="$(aws ec2 describe-security-groups --filters "Name=group-name,Values=${DB_SG_NAME}" \
-           --query 'SecurityGroups[0].GroupId' --output text 2>/dev/null || echo None)"
-if [[ "$DB_SG_ID" == "None" || -z "$DB_SG_ID" ]]; then
-  log "Creando security group de BD '${DB_SG_NAME}'..."
-  DB_SG_ID="$(aws ec2 create-security-group --group-name "$DB_SG_NAME" \
-             --description "Monitoreo Cloud - acceso a RDS solo desde EC2" \
-             --tag-specifications "$(tag_spec security-group)" \
-             --query 'GroupId' --output text)"
-  ok "Security group de BD creado: ${DB_SG_ID}"
-else
-  ok "Security group de BD '${DB_SG_NAME}' ya existe: ${DB_SG_ID}"
-fi
-aws ec2 authorize-security-group-ingress --group-id "$DB_SG_ID" \
-  --protocol tcp --port "$DB_PORT" --source-group "$SG_ID" >/dev/null 2>&1 \
-  && ok "Regla BD agregada: tcp/${DB_PORT} desde SG de la EC2 (${SG_ID})" \
-  || warn "Regla tcp/${DB_PORT} de la BD ya existía (o sin cambio)."
-
-# --- RDS PostgreSQL (creación sin espera; se espera al final) -----------------
-DB_STATUS="$(find_rds_status)"
-if [[ -n "$DB_STATUS" && "$DB_STATUS" != "None" ]]; then
-  ok "RDS '${DB_INSTANCE_ID}' ya existe (estado: ${DB_STATUS}). No se crea otra."
-else
-  # Password maestra: usa DB_PASSWORD del entorno o genera una y la guarda fuera del repo.
-  if [[ -z "${DB_PASSWORD:-}" ]]; then
-    DB_PASSWORD="$(openssl rand -base64 18 | tr -d '/+=' | cut -c1-20)"
-    echo "$DB_PASSWORD" > "${KEY_DIR}/db-password.txt"; chmod 600 "${KEY_DIR}/db-password.txt"
-    warn "Password de BD generada y guardada en ${KEY_DIR}/db-password.txt (fuera del repo)."
-  fi
-  log "Creando RDS PostgreSQL '${DB_INSTANCE_ID}' (${DB_INSTANCE_CLASS}, Single-AZ, ${DB_ALLOCATED_GB}GB)..."
-  ENGINE_ARGS=()
-  [[ -n "$DB_ENGINE_VERSION" ]] && ENGINE_ARGS=(--engine-version "$DB_ENGINE_VERSION")
-  aws rds create-db-instance \
-    --db-instance-identifier "$DB_INSTANCE_ID" \
-    --db-instance-class "$DB_INSTANCE_CLASS" \
-    --engine postgres "${ENGINE_ARGS[@]}" \
-    --master-username "$DB_USER" --master-user-password "$DB_PASSWORD" \
-    --allocated-storage "$DB_ALLOCATED_GB" --storage-type gp2 \
-    --db-name "$DB_NAME" --port "$DB_PORT" \
-    --vpc-security-group-ids "$DB_SG_ID" \
-    --no-multi-az --no-publicly-accessible \
-    --backup-retention-period 1 \
-    --tags Key=Project,Value="$PROJECT_TAG" Key=Env,Value="$ENV_TAG" Key=ManagedBy,Value=cli >/dev/null
-  ok "RDS en creación (tomará varios minutos). Se esperará al final."
-fi
+# Nota: la base de datos NO usa RDS. PostgreSQL corre en un contenedor dentro de la EC2
+# (ver infra/docker-compose.yml) para mantener el costo en $0 indefinido.
 
 # --- Rol IAM con solo lectura de CloudWatch ----------------------------------
 if ! aws iam get-role --role-name "$IAM_ROLE_NAME" >/dev/null 2>&1; then
@@ -131,6 +87,9 @@ fi
 AMI="$(al2023_ami)"
 log "AMI Amazon Linux 2023: ${AMI}"
 USER_DATA="$(cat ./user-data.sh 2>/dev/null || echo '#!/bin/bash
+# Swap de 2 GB (el t3.micro tiene 1 GB; n8n + postgres lo agradecen)
+fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+echo "/swapfile none swap sw 0 0" >> /etc/fstab
 dnf update -y
 dnf install -y docker
 systemctl enable --now docker
@@ -152,16 +111,8 @@ IP="$(aws ec2 describe-instances --instance-ids "$INSTANCE_ID" \
       --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)"
 ok "EC2 lista: ${INSTANCE_ID} · IP pública: ${IP}"
 
-# --- Esperar RDS disponible y reportar endpoint ------------------------------
-log "Esperando a que la RDS esté 'available' (puede tardar ~5-10 min)..."
-aws rds wait db-instance-available --db-instance-identifier "$DB_INSTANCE_ID"
-DB_ENDPOINT="$(aws rds describe-db-instances --db-instance-identifier "$DB_INSTANCE_ID" \
-              --query 'DBInstances[0].Endpoint.Address' --output text)"
-ok "RDS disponible · endpoint: ${DB_ENDPOINT}:${DB_PORT} · db: ${DB_NAME} · user: ${DB_USER}"
-
 echo ""
 ok "Provisión completa."
 log "SSH:  ssh -i ${KEY_DIR}/${KEY_NAME}.pem ec2-user@${IP}"
-log "n8n:  http://${IP}:${N8N_PORT} (tras desplegar el compose)"
-log "BD:   en el .env de la EC2 usa DB_POSTGRESDB_HOST=${DB_ENDPOINT}"
-[[ -f "${KEY_DIR}/db-password.txt" ]] && log "Password BD en: ${KEY_DIR}/db-password.txt"
+log "n8n:  http://${IP}:${N8N_PORT} (tras desplegar el compose con postgres)"
+log "BD:   PostgreSQL corre en contenedor (servicio 'postgres'); configúralo en el .env de la EC2."
