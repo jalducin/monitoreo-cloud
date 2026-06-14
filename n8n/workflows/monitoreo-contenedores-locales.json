@@ -1,0 +1,190 @@
+{
+  "updatedAt": "2026-06-14T17:46:42.410Z",
+  "createdAt": "2026-06-14T17:46:38.426Z",
+  "id": "monitoreolocaldck",
+  "name": "Monitoreo contenedores locales -> Postgres",
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "id": "t0",
+      "name": "Run manual",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        200,
+        120
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "t1",
+      "name": "Cron 1 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        200,
+        360
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "c1",
+      "name": "Lista contenedores",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        240
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "http://docker-socket-proxy:2375/containers/json",
+        "options": {}
+      }
+    },
+    {
+      "id": "c2",
+      "name": "Stats",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        240
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=http://docker-socket-proxy:2375/containers/{{ $json.Id }}/stats?stream=false",
+        "options": {}
+      }
+    },
+    {
+      "id": "c3",
+      "name": "TF Contenedores",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        920,
+        240
+      ],
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst rows = [];\nfor (const it of items) {\n  const s = it.json;\n  if (!s || !s.name) continue;\n  const name = String(s.name).replace(/^\\//, '');\n  const memUsage = (s.memory_stats && s.memory_stats.usage) ? Number(s.memory_stats.usage) : 0;\n  const memMb = memUsage / 1048576;\n  let cpuPct = 0;\n  try {\n    const cd = s.cpu_stats.cpu_usage.total_usage - s.precpu_stats.cpu_usage.total_usage;\n    const sd = s.cpu_stats.system_cpu_usage - s.precpu_stats.system_cpu_usage;\n    let cpus = s.cpu_stats.online_cpus;\n    if (!cpus && s.cpu_stats.cpu_usage.percpu_usage) cpus = s.cpu_stats.cpu_usage.percpu_usage.length;\n    if (!cpus) cpus = 1;\n    if (sd > 0 && cd > 0) cpuPct = (cd / sd) * cpus * 100;\n  } catch (e) { cpuPct = 0; }\n  rows.push({ json: { query: \"INSERT INTO metrics (metric_name, value, instance_id, region) VALUES ('container_mem_mb', \" + memMb.toFixed(2) + \", '\" + name + \"', 'local')\" } });\n  rows.push({ json: { query: \"INSERT INTO metrics (metric_name, value, instance_id, region) VALUES ('container_cpu_pct', \" + cpuPct.toFixed(2) + \", '\" + name + \"', 'local')\" } });\n}\nreturn rows;\n"
+      }
+    },
+    {
+      "id": "c4",
+      "name": "Insert",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1160,
+        240
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "postgresmetric01",
+          "name": "Postgres metrics"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ $json.query }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Cron 1 min": {
+      "main": [
+        [
+          {
+            "node": "Lista contenedores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run manual": {
+      "main": [
+        [
+          {
+            "node": "Lista contenedores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lista contenedores": {
+      "main": [
+        [
+          {
+            "node": "Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stats": {
+      "main": [
+        [
+          {
+            "node": "TF Contenedores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TF Contenedores": {
+      "main": [
+        [
+          {
+            "node": "Insert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": null,
+  "versionId": null,
+  "versionCounter": 2,
+  "triggerCount": 0,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-06-14T17:46:38.426Z",
+      "createdAt": "2026-06-14T17:46:38.426Z",
+      "role": "workflow:owner",
+      "workflowId": "monitoreolocaldck",
+      "projectId": "b4qXFbZ1FQCtxeUt",
+      "project": {
+        "updatedAt": "2026-06-14T14:24:34.940Z",
+        "createdAt": "2026-06-14T14:24:34.940Z",
+        "id": "b4qXFbZ1FQCtxeUt",
+        "name": "Unnamed Project",
+        "type": "personal",
+        "icon": null,
+        "description": null
+      }
+    }
+  ]
+}

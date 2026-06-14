@@ -47,6 +47,21 @@ CloudWatch GetMetricStatistics (HTTP + cred AWS, SigV4) · Transformar (Code) ·
 > parsea `GetMetricStatisticsResponse.GetMetricStatisticsResult.Datapoints`, toma el último por
 > `Timestamp` (epoch→ISO) y arma el `INSERT` en `metrics`.
 
+## `monitoreo-contenedores-locales.json` (infra local)
+
+Monitorea **todos los contenedores Docker locales** (apps + bases de datos: stack n8n, Trackion,
+Supabase, etc.). Solo para uso local. Nodos:
+
+1. **Cron 1 min** (+ **Run manual**).
+2. **Lista contenedores** (HTTP GET `http://docker-socket-proxy:2375/containers/json`) — n8n divide el
+   array en un item por contenedor. El `docker-socket-proxy` (servicio del compose, read-only) expone la
+   API de Docker sin dar acceso directo al socket.
+3. **Stats** (HTTP GET `/containers/{{ $json.Id }}/stats?stream=false`) por contenedor.
+4. **TF Contenedores** (Code) — calcula memoria (MB) y CPU% (delta vs `precpu_stats`), una fila por métrica.
+5. **Insert** (Postgres) → `metric_name` = `container_mem_mb` / `container_cpu_pct`, `instance_id` = contenedor.
+
+Dashboard Grafana: **"Contenedores Locales (Docker)"** (uid `infra-local`).
+
 ## Importar en una instancia nueva (CLI)
 
 1. Crea `credentials.json` a partir de `../credentials.example.json` con los valores reales

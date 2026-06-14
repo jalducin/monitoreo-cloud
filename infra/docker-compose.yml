@@ -76,6 +76,21 @@ services:
       - grafana_data:/var/lib/grafana
     mem_limit: 300m
 
+  # --- Monitoreo de contenedores LOCALES (apps + bases de datos) ---
+  # Proxy de solo lectura a la API de Docker; n8n consulta /containers para CPU/memoria por contenedor.
+  # Pensado para uso local (Docker Desktop). En EC2 no es necesario.
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    container_name: docker-socket-proxy
+    restart: always
+    environment:
+      - CONTAINERS=1   # solo GET /containers (read-only); el resto bloqueado
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "127.0.0.1:12375:2375"   # solo localhost, para inspección manual
+    mem_limit: 64m
+
 volumes:
   n8n_data:
     driver: local
