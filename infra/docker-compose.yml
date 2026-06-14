@@ -5,7 +5,7 @@ services:
   postgres:
     image: postgres:16.4-alpine          # versión fijada (no 'latest')
     container_name: n8n-postgres
-    restart: unless-stopped
+    restart: always
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -22,7 +22,7 @@ services:
   n8n:
     image: docker.n8n.io/n8nio/n8n:1.118.0   # versión fijada (no 'latest')
     container_name: n8n
-    restart: unless-stopped
+    restart: always
     depends_on:
       postgres:
         condition: service_healthy
@@ -60,7 +60,7 @@ services:
   grafana:
     image: grafana/grafana-oss:11.3.1   # versión fijada (no 'latest')
     container_name: grafana
-    restart: unless-stopped
+    restart: always
     depends_on:
       postgres:
         condition: service_healthy
