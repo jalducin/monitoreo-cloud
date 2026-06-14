@@ -76,6 +76,30 @@ cd scripts/aws && ./status.sh            # instancia, SG, budget, costo del mes
 - La alerta dispara con un umbral de prueba.
 - El costo del mes sigue en \$0 / dentro del Free Tier.
 
+## 6b. Modo local (sin AWS, $0 sin límite)
+
+Para correr todo en tu máquina con Docker (sin EC2):
+
+```bash
+cd infra
+cp ../.env.example .env && nano .env   # N8N_HOST=localhost, claves locales, POSTGRES_*/GF_*
+docker compose --env-file .env up -d   # postgres + n8n + grafana
+```
+
+Luego, dentro del contenedor (usa `MSYS_NO_PATHCONV=1` en Git Bash para que `/tmp/...` no se convierta):
+
+```bash
+docker exec -i n8n-postgres psql -U n8n -d n8n -c "CREATE TABLE IF NOT EXISTS metrics (...);"  # esquema en n8n/workflows/README.md
+docker cp credentials.json n8n:/tmp/ && docker exec n8n n8n import:credentials --input=/tmp/credentials.json
+docker cp n8n/workflows/metricas-cloudwatch-postgres.json n8n:/tmp/ && docker exec n8n n8n import:workflow --input=/tmp/metricas-cloudwatch-postgres.json
+docker exec n8n n8n update:workflow --id=monitoreocloudwf --active=true && docker compose restart n8n
+```
+
+- n8n: `http://localhost:5678` · Grafana: `http://localhost:3000` (datasource Postgres, mismo `uid` que el dashboard del repo).
+- Para leer CloudWatch necesitas el usuario IAM `monitoreo-cloud-n8n` (se conserva en AWS, es gratis);
+  apunta el workflow a un recurso AWS existente. Sin recurso vivo no hay datos nuevos.
+- Apagar: `docker compose down` (los volúmenes `n8n_data`, `pg_data`, `grafana_data` se conservan).
+
 ## 7. Limpieza (rollback / fin de demo)
 
 ```bash
