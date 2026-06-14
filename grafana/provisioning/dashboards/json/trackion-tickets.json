@@ -1,0 +1,91 @@
+{
+  "uid": "trackion-tickets",
+  "title": "Trackion — Tickets & SLA",
+  "tags": ["trackion", "tickets", "sla"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-90d", "to": "now" },
+  "templating": { "list": [] },
+  "annotations": { "list": [] },
+  "panels": [
+    {
+      "id": 1, "type": "stat", "title": "Tickets totales",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "trackionpg" },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "blue" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "none", "textMode": "value_and_name" },
+      "targets": [ { "refId": "A", "datasource": { "type": "postgres", "uid": "trackionpg" }, "format": "table", "rawQuery": true, "rawSql": "SELECT count(*) AS \"Totales\" FROM tickets" } ]
+    },
+    {
+      "id": 2, "type": "stat", "title": "Abiertos / En progreso",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "trackionpg" },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "blue" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "none", "textMode": "value_and_name" },
+      "targets": [ { "refId": "A", "datasource": { "type": "postgres", "uid": "trackionpg" }, "format": "table", "rawQuery": true, "rawSql": "SELECT count(*) AS \"Activos\" FROM tickets WHERE status IN ('open','in_progress')" } ]
+    },
+    {
+      "id": 3, "type": "stat", "title": "SLA vencido",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "trackionpg" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "background", "graphMode": "none", "textMode": "value_and_name" },
+      "targets": [ { "refId": "A", "datasource": { "type": "postgres", "uid": "trackionpg" }, "format": "table", "rawQuery": true, "rawSql": "SELECT count(*) AS \"Vencidos\" FROM tickets t JOIN priorities p ON p.id=t.priority_id WHERE (t.status NOT IN ('resolved','closed') AND now() > t.created_at + make_interval(hours => p.sla_hours)) OR (t.status IN ('resolved','closed') AND t.resolved_at > t.created_at + make_interval(hours => p.sla_hours))" } ]
+    },
+    {
+      "id": 4, "type": "stat", "title": "SLA por vencer",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "trackionpg" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 1 } ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "background", "graphMode": "none", "textMode": "value_and_name" },
+      "targets": [ { "refId": "A", "datasource": { "type": "postgres", "uid": "trackionpg" }, "format": "table", "rawQuery": true, "rawSql": "SELECT count(*) AS \"Por vencer\" FROM tickets t JOIN priorities p ON p.id=t.priority_id WHERE t.status NOT IN ('resolved','closed') AND now() <= t.created_at + make_interval(hours => p.sla_hours) AND now() > t.created_at + make_interval(mins => p.sla_hours*48)" } ]
+    },
+    {
+      "id": 5, "type": "piechart", "title": "Tickets por estado",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 4 },
+      "datasource": { "type": "postgres", "uid": "trackionpg" },
+      "fieldConfig": { "defaults": { "custom": { "hideFrom": { "tooltip": false, "viz": false, "legend": false } } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": true }, "pieType": "donut", "legend": { "displayMode": "list", "placement": "right", "values": ["value"] } },
+      "targets": [ { "refId": "A", "datasource": { "type": "postgres", "uid": "trackionpg" }, "format": "table", "rawQuery": true, "rawSql": "SELECT CASE status WHEN 'open' THEN 'Abierto' WHEN 'in_progress' THEN 'En progreso' WHEN 'resolved' THEN 'Resuelto' WHEN 'closed' THEN 'Cerrado' ELSE status END AS metric, count(*) AS value FROM tickets GROUP BY status" } ]
+    },
+    {
+      "id": 6, "type": "piechart", "title": "Estado de SLA",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 4 },
+      "datasource": { "type": "postgres", "uid": "trackionpg" },
+      "fieldConfig": { "defaults": { "custom": { "hideFrom": { "tooltip": false, "viz": false, "legend": false } } }, "overrides": [
+        { "matcher": { "id": "byName", "options": "Vencido" }, "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } } ] },
+        { "matcher": { "id": "byName", "options": "Por vencer" }, "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } } ] },
+        { "matcher": { "id": "byName", "options": "En tiempo" }, "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } } ] },
+        { "matcher": { "id": "byName", "options": "Cumplido" }, "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } } ] }
+      ] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": true }, "pieType": "donut", "legend": { "displayMode": "list", "placement": "right", "values": ["value"] } },
+      "targets": [ { "refId": "A", "datasource": { "type": "postgres", "uid": "trackionpg" }, "format": "table", "rawQuery": true, "rawSql": "SELECT CASE s WHEN 'met' THEN 'Cumplido' WHEN 'breached' THEN 'Vencido' WHEN 'due_soon' THEN 'Por vencer' ELSE 'En tiempo' END AS metric, count(*) AS value FROM ( SELECT CASE WHEN t.status IN ('resolved','closed') THEN CASE WHEN t.resolved_at <= t.created_at + make_interval(hours => p.sla_hours) THEN 'met' ELSE 'breached' END WHEN now() > t.created_at + make_interval(hours => p.sla_hours) THEN 'breached' WHEN now() > t.created_at + make_interval(mins => p.sla_hours*48) THEN 'due_soon' ELSE 'on_track' END AS s FROM tickets t JOIN priorities p ON p.id=t.priority_id ) x GROUP BY s" } ]
+    },
+    {
+      "id": 7, "type": "barchart", "title": "Tickets por prioridad",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 4 },
+      "datasource": { "type": "postgres", "uid": "trackionpg" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 1, "fillOpacity": 80 } }, "overrides": [] },
+      "options": { "orientation": "horizontal", "showValue": "always", "legend": { "showLegend": false }, "xField": "metric" },
+      "targets": [ { "refId": "A", "datasource": { "type": "postgres", "uid": "trackionpg" }, "format": "table", "rawQuery": true, "rawSql": "SELECT p.name AS metric, count(*) AS \"Tickets\" FROM tickets t JOIN priorities p ON p.id=t.priority_id GROUP BY p.name, p.level ORDER BY p.level DESC" } ]
+    },
+    {
+      "id": 8, "type": "timeseries", "title": "Tickets creados por día",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "postgres", "uid": "trackionpg" },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "blue" }, "custom": { "drawStyle": "bars", "fillOpacity": 60, "lineWidth": 1 } }, "overrides": [] },
+      "options": { "legend": { "showLegend": false }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [ { "refId": "A", "datasource": { "type": "postgres", "uid": "trackionpg" }, "format": "time_series", "rawQuery": true, "rawSql": "SELECT date_trunc('day', created_at) AS time, count(*) AS \"Creados\" FROM tickets GROUP BY 1 ORDER BY 1" } ]
+    },
+    {
+      "id": 9, "type": "table", "title": "Tickets con SLA vencido",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "postgres", "uid": "trackionpg" },
+      "fieldConfig": { "defaults": { "custom": { "align": "left" } }, "overrides": [] },
+      "options": { "showHeader": true },
+      "targets": [ { "refId": "A", "datasource": { "type": "postgres", "uid": "trackionpg" }, "format": "table", "rawQuery": true, "rawSql": "SELECT t.id AS \"#\", t.subject AS \"Asunto\", p.name AS \"Prioridad\", CASE t.status WHEN 'open' THEN 'Abierto' WHEN 'in_progress' THEN 'En progreso' ELSE t.status END AS \"Estado\", to_char(t.created_at + make_interval(hours => p.sla_hours), 'YYYY-MM-DD HH24:MI') AS \"Venció\" FROM tickets t JOIN priorities p ON p.id=t.priority_id WHERE t.status NOT IN ('resolved','closed') AND now() > t.created_at + make_interval(hours => p.sla_hours) ORDER BY t.created_at" } ]
+    }
+  ]
+}

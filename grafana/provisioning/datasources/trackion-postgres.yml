@@ -1,0 +1,22 @@
+# Datasource adicional: PostgreSQL del proyecto Trackion (helpdesk) → dashboard "Trackion — Tickets & SLA".
+# Trackion corre en su propio docker-compose (c:/Desarrollo/Python/Trackion); su BD es el contenedor
+# `trackion-db-1`. Para que ESTE Grafana lo alcance, el contenedor `grafana` debe estar conectado a la
+# red de Trackion:   docker network connect trackion_default grafana
+# (re-ejecutar si se recrea cualquiera de los dos stacks).
+#
+# La password se inyecta por variable de entorno (no se versiona el valor): $TRACKION_DB_PASSWORD.
+apiVersion: 1
+datasources:
+  - name: Trackion PostgreSQL
+    type: postgres
+    uid: trackionpg
+    access: proxy
+    url: trackion-db-1:5432
+    user: trackion
+    database: trackion
+    isDefault: false
+    secureJsonData:
+      password: $TRACKION_DB_PASSWORD
+    jsonData:
+      sslmode: disable
+      postgresVersion: 1600
