@@ -1,0 +1,53 @@
+apiVersion: 1
+groups:
+    - orgId: 1
+      name: trackion-sla
+      folder: Trackion
+      interval: 1m
+      rules:
+        - uid: efp4g937etvr4c
+          title: Trackion - SLA vencido
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: trackionpg
+              model:
+                format: table
+                intervalMs: 1000
+                maxDataPoints: 43200
+                rawSql: SELECT count(*)::float AS value FROM tickets t JOIN priorities p ON p.id=t.priority_id WHERE (t.status NOT IN ('resolved','closed') AND now() > t.created_at + make_interval(hours => p.sla_hours)) OR (t.status IN ('resolved','closed') AND t.resolved_at > t.created_at + make_interval(hours => p.sla_hours))
+                refId: A
+            - refId: C
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 0
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - A
+                      reducer:
+                        params: []
+                        type: last
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: OK
+          execErrState: Error
+          for: 5m
+          annotations:
+            description: El conteo de tickets con SLA vencido es mayor a 0.
+            summary: Hay tickets con SLA vencido en Trackion
+          labels:
+            app: trackion
+            severity: warning
+          isPaused: false

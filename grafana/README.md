@@ -54,3 +54,14 @@ Definir al menos una alerta (p. ej. CPU alta sostenida) en Grafana → Alerting,
 | Alerta | Métrica | Condición | Canal |
 |---|---|---|---|
 | CPU alta sostenida | CPU EC2 | > 80% por 5 min | (por configurar) |
+| Trackion — SLA vencido | tickets con SLA vencido | > 0 por 5 min | webhook `trackion-alertas` |
+
+### Trackion — SLA vencido (configurada el 2026-06-14)
+
+- **Regla** "Trackion - SLA vencido" (folder `Trackion`, grupo `trackion-sla`): dispara si el conteo de
+  tickets con SLA vencido es `> 0` durante 5 min. Versionada en
+  `provisioning/alerting/trackion-alert-rules.yaml`.
+- **Contact point** `trackion-alertas` (tipo webhook). Apunta a un sink de demostración
+  (`https://httpbin.org/post`); **reemplazar por el canal real** (Slack/email/n8n).
+- **Ruteo no invasivo:** se agregó una ruta en la notification policy que enruta SOLO las alertas con
+  label `app=trackion` al contact point de Trackion; el receiver raíz (n8n) **no se modificó**.
