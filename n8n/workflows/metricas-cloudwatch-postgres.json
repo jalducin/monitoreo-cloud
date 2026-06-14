@@ -1,11 +1,22 @@
 {
-  "updatedAt": "2026-06-13T21:10:07.883Z",
+  "updatedAt": "2026-06-14T17:15:38.745Z",
   "createdAt": "2026-06-13T20:54:49.116Z",
   "id": "monitoreocloudwf",
-  "name": "Metricas CloudWatch -> Postgres",
+  "name": "Metricas Lambda CloudWatch -> Postgres",
   "active": true,
   "isArchived": false,
   "nodes": [
+    {
+      "id": "n0",
+      "name": "Run manual",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        120
+      ],
+      "parameters": {}
+    },
     {
       "id": "n1",
       "name": "Cron 5 min",
@@ -13,7 +24,7 @@
       "typeVersion": 1.2,
       "position": [
         240,
-        300
+        320
       ],
       "parameters": {
         "rule": {
@@ -28,12 +39,25 @@
     },
     {
       "id": "n2",
-      "name": "CloudWatch GetMetricStatistics",
+      "name": "Funciones",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        220
+      ],
+      "parameters": {
+        "jsCode": "return [\n  { json: { fn: 'metalshop-api-dev' } },\n  { json: { fn: 'trackion-develop-api' } },\n  { json: { fn: 'jalducin-assistant' } },\n  { json: { fn: 'trackion-develop-authorizer' } }\n];\n"
+      }
+    },
+    {
+      "id": "n3",
+      "name": "Lambda Invocations",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        480,
-        300
+        680,
+        220
       ],
       "parameters": {
         "method": "POST",
@@ -54,23 +78,23 @@
             },
             {
               "name": "Namespace",
-              "value": "AWS/EC2"
+              "value": "AWS/Lambda"
             },
             {
               "name": "MetricName",
-              "value": "CPUUtilization"
+              "value": "Invocations"
             },
             {
               "name": "Dimensions.member.1.Name",
-              "value": "InstanceId"
+              "value": "FunctionName"
             },
             {
               "name": "Dimensions.member.1.Value",
-              "value": "i-0dbfa95b85e86f444"
+              "value": "={{ $json.fn }}"
             },
             {
               "name": "StartTime",
-              "value": "={{ $now.minus({ minutes: 15 }).toUTC().toISO() }}"
+              "value": "={{ $now.minus({ hours: 24 }).toUTC().toISO() }}"
             },
             {
               "name": "EndTime",
@@ -78,11 +102,11 @@
             },
             {
               "name": "Period",
-              "value": "300"
+              "value": "86400"
             },
             {
               "name": "Statistics.member.1",
-              "value": "Average"
+              "value": "Sum"
             }
           ]
         },
@@ -102,26 +126,26 @@
       }
     },
     {
-      "id": "n3",
+      "id": "n4",
       "name": "Transformar",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        720,
-        300
+        900,
+        220
       ],
       "parameters": {
-        "jsCode": "const body = $input.first().json;\nlet raw = body.data !== undefined ? body.data : body;\nlet obj = typeof raw === 'string' ? JSON.parse(raw) : raw;\nconst result = obj && obj.GetMetricStatisticsResponse && obj.GetMetricStatisticsResponse.GetMetricStatisticsResult;\nlet dps = (result && result.Datapoints) || [];\nconst arr = Array.isArray(dps) ? dps : [dps];\nlet latest = null;\nfor (const d of arr) {\n  if (d && d.Average != null && d.Timestamp != null) {\n    if (!latest || Number(d.Timestamp) > Number(latest.Timestamp)) latest = d;\n  }\n}\nif (!latest) return [];\nconst tsIso = new Date(Number(latest.Timestamp) * 1000).toISOString();\nconst val = Number(latest.Average);\nconst instance = 'i-0dbfa95b85e86f444';\nconst region = 'us-east-2';\nconst q = \"INSERT INTO metrics (metric_name, value, ts, instance_id, region) VALUES ('cpu_utilization', \" + val + \", '\" + tsIso + \"', '\" + instance + \"', '\" + region + \"')\";\nreturn [{ json: { query: q, value: val, ts: tsIso } }];\n"
+        "jsCode": "const funcs = $('Funciones').all();\nconst items = $input.all();\nconst region = 'us-east-2';\nconst rows = [];\nfor (let i = 0; i < items.length; i++) {\n  const fn = (funcs[i] && funcs[i].json && funcs[i].json.fn) ? funcs[i].json.fn : 'unknown';\n  let raw = (items[i].json && items[i].json.data !== undefined) ? items[i].json.data : items[i].json;\n  let obj;\n  try { obj = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (e) { obj = {}; }\n  let dps = obj && obj.GetMetricStatisticsResponse && obj.GetMetricStatisticsResponse.GetMetricStatisticsResult\n    ? obj.GetMetricStatisticsResponse.GetMetricStatisticsResult.Datapoints : [];\n  const arr = Array.isArray(dps) ? dps : (dps ? [dps] : []);\n  let latest = null;\n  for (const d of arr) {\n    if (d && d.Sum != null && d.Timestamp != null) {\n      if (!latest || Number(d.Timestamp) > Number(latest.Timestamp)) latest = d;\n    }\n  }\n  const v = latest ? Number(latest.Sum) : 0;\n  const tsIso = latest ? new Date(Number(latest.Timestamp) * 1000).toISOString() : new Date().toISOString();\n  const q = \"INSERT INTO metrics (metric_name, value, ts, instance_id, region) VALUES ('lambda_invocations', \" + v + \", '\" + tsIso + \"', '\" + fn + \"', '\" + region + \"')\";\n  rows.push({ json: { query: q, fn: fn, value: v } });\n}\nreturn rows;\n"
       }
     },
     {
-      "id": "n4",
+      "id": "n5",
       "name": "Insert metrics",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        960,
-        300
+        1120,
+        220
       ],
       "parameters": {
         "operation": "executeQuery",
@@ -134,17 +158,6 @@
           "name": "Postgres metrics"
         }
       }
-    },
-    {
-      "id": "n0",
-      "name": "Run manual",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
-      "typeVersion": 1.1,
-      "position": [
-        240,
-        120
-      ],
-      "parameters": {}
     }
   ],
   "connections": {
@@ -152,14 +165,36 @@
       "main": [
         [
           {
-            "node": "CloudWatch GetMetricStatistics",
+            "node": "Funciones",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "CloudWatch GetMetricStatistics": {
+    "Run manual": {
+      "main": [
+        [
+          {
+            "node": "Funciones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Funciones": {
+      "main": [
+        [
+          {
+            "node": "Lambda Invocations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lambda Invocations": {
       "main": [
         [
           {
@@ -180,17 +215,6 @@
           }
         ]
       ]
-    },
-    "Run manual": {
-      "main": [
-        [
-          {
-            "node": "CloudWatch GetMetricStatistics",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
     }
   },
   "settings": {
@@ -200,20 +224,20 @@
   "meta": null,
   "pinData": null,
   "versionId": null,
-  "versionCounter": 5,
+  "versionCounter": 11,
   "triggerCount": 0,
   "tags": [],
   "shared": [
     {
-      "updatedAt": "2026-06-13T20:54:49.116Z",
-      "createdAt": "2026-06-13T20:54:49.116Z",
+      "updatedAt": "2026-06-14T14:26:48.744Z",
+      "createdAt": "2026-06-14T14:26:48.744Z",
       "role": "workflow:owner",
       "workflowId": "monitoreocloudwf",
-      "projectId": "J2F4giqudVFdqHmb",
+      "projectId": "b4qXFbZ1FQCtxeUt",
       "project": {
-        "updatedAt": "2026-06-13T19:30:32.603Z",
-        "createdAt": "2026-06-13T19:30:32.603Z",
-        "id": "J2F4giqudVFdqHmb",
+        "updatedAt": "2026-06-14T14:24:34.940Z",
+        "createdAt": "2026-06-14T14:24:34.940Z",
+        "id": "b4qXFbZ1FQCtxeUt",
         "name": "Unnamed Project",
         "type": "personal",
         "icon": null,

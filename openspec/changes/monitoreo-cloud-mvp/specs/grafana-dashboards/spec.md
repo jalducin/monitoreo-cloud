@@ -1,11 +1,12 @@
 ## ADDED Requirements
 
-### Requirement: Dashboard de observabilidad del EC2
+### Requirement: Dashboard de observabilidad
 
-El sistema SHALL proveer un dashboard en **Grafana self-hosted** (contenedor en la EC2) con, como mínimo,
-un panel de uso de CPU del EC2 (y memoria cuando esté disponible) alimentado desde el **datasource
-PostgreSQL** (tabla `metrics`). El dashboard SHALL versionarse como código (JSON) en `grafana/` para ser
-reproducible. El acceso a Grafana SHALL restringirse por security group a la IP del operador.
+El sistema SHALL proveer un dashboard en **Grafana self-hosted** (contenedor) con, como mínimo, un panel
+de **invocaciones por función Lambda** (serie por `instance_id`) alimentado desde el **datasource
+PostgreSQL** (tabla `metrics`); ampliable a otras métricas (S3, EC2). El dashboard SHALL versionarse como
+código (JSON) en `grafana/` para ser reproducible. El acceso a Grafana SHALL restringirse a la IP del
+operador (security group en AWS, o solo `localhost` en modo local).
 
 #### Scenario: Paneles con datos
 

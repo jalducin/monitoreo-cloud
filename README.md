@@ -22,8 +22,8 @@
                     │  pull cada N min (rol IAM, solo lectura)
                     ▼
 ┌───────────────────────────────────────────────────────────────┐
-│  n8n  — EC2 t3.micro (Amazon Linux 2023, Docker Compose)        │
-│  Schedule → CloudWatch → normaliza → INSERT en Postgres         │
+│  n8n  — Docker (EC2 t3.micro o local)                           │
+│  Cron → CloudWatch (invocaciones Lambda) → INSERT en Postgres   │
 └───────────────────────────────────────────────────────────────┘
                     │  escribe en tabla `metrics`
                     ▼
