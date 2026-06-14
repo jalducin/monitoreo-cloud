@@ -3,9 +3,10 @@
 ### Requirement: Extracción programada de métricas de CloudWatch
 
 El sistema SHALL ejecutar un workflow de n8n que, en una programación definida (cron, cada X minutos),
-extrae métricas de AWS CloudWatch de los recursos AWS de la cuenta (implementado: **invocaciones de las
-funciones Lambda** vía `GetMetricStatistics`; ampliable a errores/duración, S3, EC2) usando credenciales
-de **solo lectura** (usuario IAM dedicado). La frecuencia MUST elegirse para no exceder el Free Tier de CloudWatch.
+extrae métricas de AWS CloudWatch de los recursos de la cuenta vía `GetMetricStatistics` usando
+credenciales de **solo lectura** (usuario IAM dedicado). Implementado: **Lambda** (Invocations, Errors,
+Duration por función) y **S3** (NumberOfObjects por bucket); ampliable a EC2 y otros. La frecuencia MUST
+elegirse para no exceder el Free Tier de CloudWatch.
 
 #### Scenario: Ejecución programada exitosa
 

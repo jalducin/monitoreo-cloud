@@ -1,30 +1,30 @@
 {
-  "updatedAt": "2026-06-14T17:15:38.745Z",
+  "updatedAt": "2026-06-14T17:25:18.469Z",
   "createdAt": "2026-06-13T20:54:49.116Z",
   "id": "monitoreocloudwf",
-  "name": "Metricas Lambda CloudWatch -> Postgres",
+  "name": "Observabilidad AWS -> Postgres",
   "active": true,
   "isArchived": false,
   "nodes": [
     {
-      "id": "n0",
+      "id": "t0",
       "name": "Run manual",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
       "position": [
-        240,
-        120
+        200,
+        80
       ],
       "parameters": {}
     },
     {
-      "id": "n1",
+      "id": "t1",
       "name": "Cron 5 min",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
-        240,
-        320
+        200,
+        420
       ],
       "parameters": {
         "rule": {
@@ -38,27 +38,33 @@
       }
     },
     {
-      "id": "n2",
-      "name": "Funciones",
+      "id": "l1",
+      "name": "Lambdas",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        460,
-        220
+        440,
+        200
       ],
       "parameters": {
-        "jsCode": "return [\n  { json: { fn: 'metalshop-api-dev' } },\n  { json: { fn: 'trackion-develop-api' } },\n  { json: { fn: 'jalducin-assistant' } },\n  { json: { fn: 'trackion-develop-authorizer' } }\n];\n"
+        "jsCode": "const fns = ['metalshop-api-dev', 'trackion-develop-api', 'jalducin-assistant', 'trackion-develop-authorizer'];\nconst metrics = [\n  { metricName: 'Invocations', stat: 'Sum', label: 'lambda_invocations' },\n  { metricName: 'Errors', stat: 'Sum', label: 'lambda_errors' },\n  { metricName: 'Duration', stat: 'Average', label: 'lambda_duration_ms' }\n];\nconst out = [];\nfor (const fn of fns) for (const m of metrics) out.push({ json: { fn, metricName: m.metricName, stat: m.stat, label: m.label } });\nreturn out;\n"
       }
     },
     {
-      "id": "n3",
-      "name": "Lambda Invocations",
+      "id": "l2",
+      "name": "HTTP Lambda",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
         680,
-        220
+        200
       ],
+      "credentials": {
+        "aws": {
+          "id": "awscloudwatchro1",
+          "name": "AWS CloudWatch RO"
+        }
+      },
       "parameters": {
         "method": "POST",
         "url": "https://monitoring.us-east-2.amazonaws.com/",
@@ -82,7 +88,7 @@
             },
             {
               "name": "MetricName",
-              "value": "Invocations"
+              "value": "={{ $json.metricName }}"
             },
             {
               "name": "Dimensions.member.1.Name",
@@ -106,7 +112,7 @@
             },
             {
               "name": "Statistics.member.1",
-              "value": "Sum"
+              "value": "={{ $json.stat }}"
             }
           ]
         },
@@ -117,46 +123,170 @@
             }
           }
         }
-      },
-      "credentials": {
-        "aws": {
-          "id": "awscloudwatchro1",
-          "name": "AWS CloudWatch RO"
-        }
       }
     },
     {
-      "id": "n4",
-      "name": "Transformar",
+      "id": "l3",
+      "name": "TF Lambda",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        900,
-        220
+        920,
+        200
       ],
       "parameters": {
-        "jsCode": "const funcs = $('Funciones').all();\nconst items = $input.all();\nconst region = 'us-east-2';\nconst rows = [];\nfor (let i = 0; i < items.length; i++) {\n  const fn = (funcs[i] && funcs[i].json && funcs[i].json.fn) ? funcs[i].json.fn : 'unknown';\n  let raw = (items[i].json && items[i].json.data !== undefined) ? items[i].json.data : items[i].json;\n  let obj;\n  try { obj = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (e) { obj = {}; }\n  let dps = obj && obj.GetMetricStatisticsResponse && obj.GetMetricStatisticsResponse.GetMetricStatisticsResult\n    ? obj.GetMetricStatisticsResponse.GetMetricStatisticsResult.Datapoints : [];\n  const arr = Array.isArray(dps) ? dps : (dps ? [dps] : []);\n  let latest = null;\n  for (const d of arr) {\n    if (d && d.Sum != null && d.Timestamp != null) {\n      if (!latest || Number(d.Timestamp) > Number(latest.Timestamp)) latest = d;\n    }\n  }\n  const v = latest ? Number(latest.Sum) : 0;\n  const tsIso = latest ? new Date(Number(latest.Timestamp) * 1000).toISOString() : new Date().toISOString();\n  const q = \"INSERT INTO metrics (metric_name, value, ts, instance_id, region) VALUES ('lambda_invocations', \" + v + \", '\" + tsIso + \"', '\" + fn + \"', '\" + region + \"')\";\n  rows.push({ json: { query: q, fn: fn, value: v } });\n}\nreturn rows;\n"
+        "jsCode": "const specs = $('Lambdas').all();\nconst items = $input.all();\nconst region = 'us-east-2';\nconst rows = [];\nfor (let i = 0; i < items.length; i++) {\n  const s = specs[i].json;\n  let raw = (items[i].json && items[i].json.data !== undefined) ? items[i].json.data : items[i].json;\n  let obj; try { obj = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (e) { obj = {}; }\n  let dps = obj && obj.GetMetricStatisticsResponse && obj.GetMetricStatisticsResponse.GetMetricStatisticsResult\n    ? obj.GetMetricStatisticsResponse.GetMetricStatisticsResult.Datapoints : [];\n  const arr = Array.isArray(dps) ? dps : (dps ? [dps] : []);\n  let latest = null;\n  for (const d of arr) {\n    const val = d ? d[s.stat] : null;\n    if (val != null && d.Timestamp != null) {\n      if (!latest || Number(d.Timestamp) > Number(latest.Timestamp)) latest = { v: Number(val), ts: d.Timestamp };\n    }\n  }\n  const v = latest ? latest.v : 0;\n  const tsIso = latest ? new Date(Number(latest.ts) * 1000).toISOString() : new Date().toISOString();\n  const q = \"INSERT INTO metrics (metric_name, value, instance_id, region) VALUES ('\" + s.label + \"', \" + v + \", '\" + s.fn + \"', 'us-east-2')\";\n  rows.push({ json: { query: q } });\n}\nreturn rows;\n"
       }
     },
     {
-      "id": "n5",
-      "name": "Insert metrics",
+      "id": "l4",
+      "name": "Insert Lambda",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1120,
-        220
+        1160,
+        200
       ],
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "={{ $json.query }}",
-        "options": {}
-      },
       "credentials": {
         "postgres": {
           "id": "postgresmetric01",
           "name": "Postgres metrics"
         }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ $json.query }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "s1",
+      "name": "Buckets",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        460
+      ],
+      "parameters": {
+        "jsCode": "const buckets = ['jalducin-portfolio-957266312835', 'metalshop-frontend-dev-957266312835', 'trackion-frontend-957266312835'];\nreturn buckets.map(b => ({ json: { bucket: b } }));\n"
+      }
+    },
+    {
+      "id": "s2",
+      "name": "HTTP S3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        460
+      ],
+      "credentials": {
+        "aws": {
+          "id": "awscloudwatchro1",
+          "name": "AWS CloudWatch RO"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "https://monitoring.us-east-2.amazonaws.com/",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "aws",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "Action",
+              "value": "GetMetricStatistics"
+            },
+            {
+              "name": "Version",
+              "value": "2010-08-01"
+            },
+            {
+              "name": "Namespace",
+              "value": "AWS/S3"
+            },
+            {
+              "name": "MetricName",
+              "value": "NumberOfObjects"
+            },
+            {
+              "name": "Dimensions.member.1.Name",
+              "value": "BucketName"
+            },
+            {
+              "name": "Dimensions.member.1.Value",
+              "value": "={{ $json.bucket }}"
+            },
+            {
+              "name": "Dimensions.member.2.Name",
+              "value": "StorageType"
+            },
+            {
+              "name": "Dimensions.member.2.Value",
+              "value": "AllStorageTypes"
+            },
+            {
+              "name": "StartTime",
+              "value": "={{ $now.minus({ days: 3 }).toUTC().toISO() }}"
+            },
+            {
+              "name": "EndTime",
+              "value": "={{ $now.toUTC().toISO() }}"
+            },
+            {
+              "name": "Period",
+              "value": "86400"
+            },
+            {
+              "name": "Statistics.member.1",
+              "value": "Average"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "s3",
+      "name": "TF S3",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        920,
+        460
+      ],
+      "parameters": {
+        "jsCode": "const specs = $('Buckets').all();\nconst items = $input.all();\nconst region = 'us-east-2';\nconst rows = [];\nfor (let i = 0; i < items.length; i++) {\n  const bucket = specs[i].json.bucket;\n  let raw = (items[i].json && items[i].json.data !== undefined) ? items[i].json.data : items[i].json;\n  let obj; try { obj = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (e) { obj = {}; }\n  let dps = obj && obj.GetMetricStatisticsResponse && obj.GetMetricStatisticsResponse.GetMetricStatisticsResult\n    ? obj.GetMetricStatisticsResponse.GetMetricStatisticsResult.Datapoints : [];\n  const arr = Array.isArray(dps) ? dps : (dps ? [dps] : []);\n  let latest = null;\n  for (const d of arr) {\n    if (d && d.Average != null && d.Timestamp != null) {\n      if (!latest || Number(d.Timestamp) > Number(latest.Timestamp)) latest = { v: Number(d.Average), ts: d.Timestamp };\n    }\n  }\n  const v = latest ? latest.v : 0;\n  const tsIso = latest ? new Date(Number(latest.ts) * 1000).toISOString() : new Date().toISOString();\n  const q = \"INSERT INTO metrics (metric_name, value, instance_id, region) VALUES ('s3_objects', \" + v + \", '\" + bucket + \"', 'us-east-2')\";\n  rows.push({ json: { query: q } });\n}\nreturn rows;\n"
+      }
+    },
+    {
+      "id": "s4",
+      "name": "Insert S3",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1160,
+        460
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "postgresmetric01",
+          "name": "Postgres metrics"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ $json.query }}",
+        "options": {}
       }
     }
   ],
@@ -165,7 +295,12 @@
       "main": [
         [
           {
-            "node": "Funciones",
+            "node": "Lambdas",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Buckets",
             "type": "main",
             "index": 0
           }
@@ -176,40 +311,78 @@
       "main": [
         [
           {
-            "node": "Funciones",
+            "node": "Lambdas",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Buckets",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Funciones": {
+    "Lambdas": {
       "main": [
         [
           {
-            "node": "Lambda Invocations",
+            "node": "HTTP Lambda",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Lambda Invocations": {
+    "HTTP Lambda": {
       "main": [
         [
           {
-            "node": "Transformar",
+            "node": "TF Lambda",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Transformar": {
+    "TF Lambda": {
       "main": [
         [
           {
-            "node": "Insert metrics",
+            "node": "Insert Lambda",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buckets": {
+      "main": [
+        [
+          {
+            "node": "HTTP S3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP S3": {
+      "main": [
+        [
+          {
+            "node": "TF S3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TF S3": {
+      "main": [
+        [
+          {
+            "node": "Insert S3",
             "type": "main",
             "index": 0
           }
@@ -224,7 +397,7 @@
   "meta": null,
   "pinData": null,
   "versionId": null,
-  "versionCounter": 11,
+  "versionCounter": 15,
   "triggerCount": 0,
   "tags": [],
   "shared": [

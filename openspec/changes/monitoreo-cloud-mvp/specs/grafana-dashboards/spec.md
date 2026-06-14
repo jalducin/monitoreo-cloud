@@ -2,11 +2,11 @@
 
 ### Requirement: Dashboard de observabilidad
 
-El sistema SHALL proveer un dashboard en **Grafana self-hosted** (contenedor) con, como mínimo, un panel
-de **invocaciones por función Lambda** (serie por `instance_id`) alimentado desde el **datasource
-PostgreSQL** (tabla `metrics`); ampliable a otras métricas (S3, EC2). El dashboard SHALL versionarse como
-código (JSON) en `grafana/` para ser reproducible. El acceso a Grafana SHALL restringirse a la IP del
-operador (security group en AWS, o solo `localhost` en modo local).
+El sistema SHALL proveer un dashboard en **Grafana self-hosted** (contenedor) alimentado desde el
+**datasource PostgreSQL** (tabla `metrics`), con paneles de: **invocaciones**, **errores** y **duración**
+por función Lambda (serie por `instance_id`) y **objetos en S3** por bucket; ampliable a EC2 y otros.
+El dashboard SHALL versionarse como código (JSON) en `grafana/` para ser reproducible. El acceso a Grafana
+SHALL restringirse a la IP del operador (security group en AWS, o solo `localhost` en modo local).
 
 #### Scenario: Paneles con datos
 

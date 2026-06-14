@@ -6,20 +6,22 @@ Aquí se versionan los workflows **exportados como JSON**, **sin credenciales** 
 
 ## `metricas-cloudwatch-postgres.json` (pipeline principal)
 
-Workflow versionado (export sin secretos). Nodos:
+Workflow versionado (export sin secretos). **Dos ramas** disparadas por **Cron 5 min** (+ **Run manual**
+para pruebas por CLI), ambas firmando **SigV4** con la credencial AWS (usuario IAM `monitoreo-cloud-n8n`,
+solo lectura). n8n convierte las respuestas de CloudWatch a JSON.
 
-1. **Cron 5 min** (Schedule Trigger) + **Run manual** (Execute Workflow Trigger, para pruebas por CLI).
-2. **Funciones** (Code) — emite un item por función Lambda a monitorear (`metalshop-api-dev`,
-   `trackion-develop-api`, `jalducin-assistant`, `trackion-develop-authorizer`).
-3. **Lambda Invocations** (HTTP Request) — corre por item: `GetMetricStatistics` de `AWS/Lambda`
-   `Invocations` (Sum, ventana 24h, dimensión `FunctionName={{ $json.fn }}`), firmado **SigV4** con la
-   credencial AWS (usuario IAM `monitoreo-cloud-n8n`, solo lectura). n8n convierte la respuesta a JSON.
-4. **Transformar** (Code) — alinea por índice con `Funciones`, toma el último datapoint y arma el `INSERT`
-   (`metric_name='lambda_invocations'`, `value`, `ts`, `instance_id=<función>`, `region`).
-5. **Insert metrics** (Postgres, executeQuery) — inserta en la tabla `metrics`. Grafana lee de ahí.
+**Rama Lambda:** `Lambdas` (Code, emite 4 funciones × 3 métricas: Invocations/Errors/Duration) →
+`HTTP Lambda` (`GetMetricStatistics` `AWS/Lambda`, `MetricName`/`Stat` por item, dim `FunctionName`, 24h) →
+`TF Lambda` (Code, alinea por índice, arma `INSERT` con `metric_name` = `lambda_invocations`/`lambda_errors`/`lambda_duration_ms`) →
+`Insert Lambda` (Postgres).
+
+**Rama S3:** `Buckets` (Code, 3 buckets) → `HTTP S3` (`AWS/S3` `NumberOfObjects`, dims `BucketName`+`StorageType=AllStorageTypes`, 3 días) →
+`TF S3` (Code, `metric_name='s3_objects'`) → `Insert S3` (Postgres).
+
+`ts` se deja en `DEFAULT now()` (cada corrida = un punto nuevo → serie temporal que crece cada 5 min).
 
 > Arquitectura: **CloudWatch → n8n → PostgreSQL (`metrics`) → Grafana (datasource Postgres)**. Sin Grafana
-> Cloud ni remote write. Ampliable a errores/duración de Lambda, S3 y EC2 agregando funciones/métricas.
+> Cloud ni remote write. Para más métricas: agrega entradas a `Lambdas`/`Buckets` o una rama nueva (EC2, etc.).
 
 ### Tabla destino (`metrics`)
 
