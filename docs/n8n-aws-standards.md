@@ -6,10 +6,12 @@
 ## 1. Free Tier como restricción dura
 
 - **Nada fuera del Free Tier sin autorización explícita.** Límites de referencia:
-  - EC2 `t2.micro`: 750 hrs/mes (una sola instancia encendida 24/7 cabe el primer año).
+  - EC2 `t3.micro`: 750 hrs/mes (una sola instancia encendida 24/7 cabe el primer año).
+  - La base de datos NO usa RDS (su Free Tier caduca a los 12 meses): PostgreSQL corre en contenedor
+    dentro de la EC2 → costo $0 indefinido.
   - CloudWatch: 10 métricas custom, 10 alarmas, 5 GB de logs ingeridos.
   - Lambda: 1M requests/mes + 400k GB-s.
-  - Grafana Cloud free: 3 usuarios, 10k series de métricas, 14 días de retención.
+  - Grafana: self-hosted en contenedor (no Grafana Cloud), datasource = el PostgreSQL local. $0 indefinido.
 - **Región única**: `us-east-2` (coincide con la cuenta configurada). No crear recursos en otras regiones.
 - **Etiquetado obligatorio** en todo recurso AWS: `Project=monitoreo-cloud`, `Env=free-tier`,
   `ManagedBy=cli`. Permite filtrar costos y limpiar.
@@ -47,12 +49,18 @@
   (cada llamada a la API de CloudWatch puede tener costo si se excede el Free Tier).
 - Documentar entradas/salidas de cada workflow y las credenciales que requiere (por referencia, no valor).
 
-## 5. Docker en EC2
+## 5. Docker en EC2 y base de datos (PostgreSQL en contenedor)
 
-- Stack definido en `infra/docker-compose.yml`; n8n con volumen persistente para no perder workflows.
-- Fijar versiones de imagen (no `latest`) para reproducibilidad.
-- Variables sensibles vía archivo `.env` (en `.gitignore`) o env del host; nunca en el compose versionado.
-- Recursos acotados al `t2.micro` (1 vCPU, 1 GB RAM): habilitar swap si hace falta; vigilar OOM.
+- Stack definido en `infra/docker-compose.yml`: servicios `postgres` y `n8n`. El contenedor de n8n es **desechable**.
+- **Persistencia en PostgreSQL containerizado** (`DB_TYPE=postgresdb` → servicio `postgres`), no en RDS ni
+  SQLite: los datos viven en un **volumen persistente** de Docker, sobreviviendo a la recreación de n8n.
+  Decisión por costo $0 indefinido (RDS Free Tier caduca a los 12 meses).
+- `n8n` arranca tras `postgres healthy` (`depends_on` + healthcheck). La BD no se expone fuera de la red Docker.
+- Credenciales de la BD vía `.env` del host (en `.gitignore`); nunca en el compose versionado ni en logs.
+  La password generada se guarda fuera del repo (`~/.monitoreo-cloud/db-password.txt`).
+- **Backups**: al no ser gestionada, respaldar manualmente (`pg_dump` o copia del volumen) cuando haya datos relevantes.
+- Fijar versiones de imagen (no `latest`) para reproducibilidad (n8n y postgres).
+- Recursos acotados al `t3.micro` (1 vCPU, 1 GB RAM): **swap de 2 GB** + `mem_limit` en Compose; vigilar OOM.
 
 ## 6. Verificación (según pasos obligatorios OpenSpec)
 

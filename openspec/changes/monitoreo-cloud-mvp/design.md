@@ -2,20 +2,20 @@
 
 No existe infraestructura ni pipeline. Partimos de una cuenta AWS ya autenticada por CLI
 (`us-east-2`, perfil `default`) y queremos un MVP de observabilidad reproducible y **gratuito**
-(AWS Free Tier + Grafana Cloud free), que además sirva de portafolio. La restricción de costo es dura:
+(AWS Free Tier para cómputo + software self-hosted gratuito), que además sirva de portafolio. La restricción de costo es dura:
 toda decisión técnica se subordina a permanecer en los límites gratuitos.
 
 Stakeholders: el operador/autor (uso de portafolio). Sin SLA ni multi-usuario.
 
-Restricciones: 1 vCPU / 1 GB RAM (`t2.micro`); CloudWatch limitado a 10 métricas custom y 5 GB de logs;
-Grafana Cloud free con retención de 14 días; secretos jamás en el repo.
+Restricciones: 1 vCPU / 1 GB RAM (`t3.micro`) que aloja n8n + PostgreSQL + Grafana (con swap);
+CloudWatch limitado a 10 métricas custom y 5 GB de logs; secretos jamás en el repo.
 
 ## Goals / Non-Goals
 
 **Goals:**
 - Provisión y limpieza de infra AWS **idempotente y por CLI** (reproducible, sin consola manual salvo lo inevitable).
-- n8n self-hosted estable en `t2.micro` con persistencia y secretos seguros.
-- Pipeline CloudWatch → n8n → Grafana Cloud funcionando con dashboards y al menos una alerta.
+- n8n self-hosted estable en `t3.micro` con persistencia y secretos seguros.
+- Pipeline CloudWatch → n8n → PostgreSQL → Grafana (self-hosted) funcionando con dashboard y al menos una alerta.
 - Guardarraíles de costo (budget $1 + alerta) y teardown completo.
 - Repo público con README de portafolio.
 
@@ -33,25 +33,47 @@ idempotentes (consultar por tag antes de crear) son suficientes y transparentes.
 **Trade-off:** la idempotencia es responsabilidad nuestra (checks explícitos por tag).
 
 ### D2 — Docker Compose para n8n en EC2
-n8n oficial recomienda Docker; Compose da persistencia por volumen, versión fijada y arranque simple.
+n8n oficial recomienda Docker; Compose da arranque simple, versión fijada y configuración por entorno.
 **Alternativa descartada:** instalar n8n vía npm (más frágil, gestión de procesos manual).
 
-### D3 — Grafana **Cloud** (no self-hosted)
-El `t2.micro` no soporta cómodamente n8n + Grafana + Prometheus. Grafana Cloud free externaliza
-almacenamiento y dashboards sin costo y con retención suficiente para el MVP.
-**Alternativa descartada:** Grafana + Prometheus self-hosted en el mismo EC2 (riesgo de OOM en 1 GB RAM).
-**Implicación:** el alta de la cuenta Grafana Cloud y la obtención del endpoint/token de remote write
-son **pasos manuales** (no hay CLI oficial para crear la cuenta); se documentan en el README.
+### D8 — Persistencia de n8n en PostgreSQL containerizado (no RDS, no SQLite)
+n8n se configura con `DB_TYPE=postgresdb` apuntando a un servicio `postgres` en el mismo
+`docker compose` (imagen fijada, volumen persistente), corriendo en la propia EC2.
+**Motivación (revisada):** el objetivo es **$0 indefinido** ("tier 0"). RDS Free Tier caduca a los
+12 meses (luego ~$13-15/mes); un contenedor Postgres en el `t3.micro` es gratis para siempre y
+conserva el mismo esquema/driver que RDS (migración trivial, solo cambia el host).
+**Alternativas descartadas:**
+- *RDS PostgreSQL* — gestionado y con backups, pero gratis solo 12 meses; sobra para un MVP de portafolio.
+- *SQLite (default n8n)* — lo más simple, pero menos robusto para concurrencia y respaldos.
+- *DynamoDB* — **no es opción**: n8n no soporta NoSQL como backend (solo SQLite/Postgres/MySQL).
+**Trade-offs:** sin backups gestionados (se documenta respaldo manual del volumen / `pg_dump`);
+consume ~150-200 MB de la RAM del `t3.micro` (mitigado con swap y límites de memoria en Compose).
+**Seguridad:** la BD no se expone fuera de la red de Docker; n8n la alcanza por el nombre de servicio;
+credenciales en el `.env` del host (no versionado).
 
-### D4 — Ingesta vía Grafana Cloud remote write (Prometheus) desde n8n
-n8n arma el payload (HTTP Request node) hacia el endpoint de remote write de Grafana Cloud con el
-token en el credential store. Formato de métricas tipo Prometheus.
-**Alternativa considerada:** Influx line protocol — equivalente; se elige Prometheus por ser el default de Grafana Cloud.
+### D3 — Grafana **self-hosted** en la EC2 (no Grafana Cloud)
+Grafana corre como contenedor (`grafana-oss`) en el mismo compose, en el puerto 3000 (abierto solo a la
+IP del operador). Motivación: **$0 indefinido** y **cero pasos manuales/cuentas externas** — yo provisiono
+todo por CLI/API. Grafana Cloud free es viable, pero su alta es manual (signup + token) y tiene trial de
+14 días en algunos flujos; además duplica almacenamiento que ya tenemos.
+**Alternativa descartada:** Grafana Cloud (manual, dependencia externa).
+**RAM:** Grafana (~150-250 MB) cabe en el `t3.micro` con swap de 2 GB y `mem_limit` en Compose.
+No se usa Prometheus self-hosted (pesado): el datasource es el PostgreSQL existente.
 
-### D5 — Credenciales AWS para n8n: rol IAM de la instancia (no llaves estáticas)
-n8n leerá CloudWatch usando el **instance profile** (rol IAM con política de solo lectura de CloudWatch),
-evitando llaves estáticas en el contenedor. El SDK/HTTP usa las credenciales temporales del metadata.
-**Alternativa descartada:** Access keys en `.env` (riesgo de fuga, rotación manual).
+### D4 — Datasource PostgreSQL: n8n escribe en una tabla, Grafana la lee
+n8n inserta los datapoints en la tabla `metrics` del PostgreSQL del compose (nodo Postgres) y Grafana
+usa ese PostgreSQL como datasource. Evita Prometheus/remote write y reaprovecha la BD que ya existe.
+**Alternativa descartada:** remote write a Grafana Cloud (Prometheus) — requería cuenta y token externos.
+**Esquema:** `metrics(id, ts, metric_name, value, instance_id, region, labels)` con índices por `ts` y `(metric_name, ts)`.
+
+### D5 — Credenciales AWS para n8n: usuario IAM dedicado de mínimo privilegio
+Los nodos AWS de n8n requieren **access keys** (no soportan el rol de instancia / IMDS). Por eso n8n usa
+un usuario IAM dedicado `monitoreo-cloud-n8n` con `CloudWatchReadOnlyAccess`, y sus llaves viven **solo en
+el credential store cifrado de n8n** (nunca en el repo). El rol de instancia (D-infra) se mantiene para
+operaciones a nivel host, pero el pipeline usa el usuario dedicado.
+**Alternativa considerada (descartada):** rol de instancia vía IMDS — ideal, pero los nodos AWS de n8n no
+lo consumen; habría que firmar SigV4 a mano leyendo IMDS, demasiado frágil para el MVP.
+**Mitigación de riesgo:** privilegio mínimo (solo lectura CloudWatch), llaves rotables, fuera del repo.
 
 ### D6 — Security group de mínimo privilegio + basic auth en n8n
 SSH (22) y n8n (5678) solo desde la IP `/32` del operador; n8n con `N8N_BASIC_AUTH` activo.
@@ -64,25 +86,28 @@ filtrar costos y para que el teardown encuentre todo.
 ## Risks / Trade-offs
 
 - **Salirse del Free Tier** → mitigación: budget $1 + alerta, frecuencia de cron conservadora,
-  un solo `t2.micro`, teardown disponible, revisión semanal documentada.
-- **OOM en `t2.micro` (1 GB)** → mitigación: solo n8n en el host (Grafana en la nube), swap opcional,
-  límites de recursos en Compose.
+  un solo `t3.micro`, teardown disponible, revisión semanal documentada.
+- **OOM en el `t3.micro` (1 GB) con n8n + postgres + grafana** → mitigación: swap de 2 GB en la EC2,
+  `mem_limit` por servicio en Compose; sin Prometheus (Grafana lee de Postgres).
 - **Fuga de secretos** → mitigación: `.gitignore` reforzado, export de workflows sin credenciales,
-  rol IAM en vez de llaves, `.pem` fuera del repo.
+  rol IAM en vez de llaves, `.pem`/tokens fuera del repo (`~/.monitoreo-cloud/`).
 - **IP pública dinámica del operador rompe el SG** → mitigación: el script recalcula y actualiza la regla.
-- **Pasos manuales en Grafana Cloud (alta + token)** → mitigación: documentados paso a paso; el token
-  se inyecta vía credential store, nunca al repo.
-- **Pérdida de datos de n8n al recrear contenedor** → mitigación: volumen persistente.
+- **Acceso a Grafana/n8n por HTTP (no HTTPS)** → mitigación: puertos abiertos solo a la IP del operador;
+  para portafolio es aceptable. TLS con dominio queda como mejora.
+- **Pérdida de datos al recrear el contenedor** → mitigación: volumen persistente para PostgreSQL y Grafana;
+  respaldo manual (`pg_dump` / copia del volumen). Los contenedores de n8n/grafana son desechables.
+- **Sin backups gestionados (vs RDS)** → mitigación: `pg_dump` programado opcional; aceptable para un MVP.
 
 ## Migration Plan
 
 Despliegue incremental (sin estado previo que migrar):
-1. `scripts/aws/provision.sh` → key pair, security group, rol IAM, EC2 `t2.micro`, tags.
+1. `scripts/aws/provision.sh` → key pair, security group (EC2), rol IAM, EC2 `t3.micro`, tags.
 2. `scripts/aws/budget.sh` → budget $1 + alerta.
-3. En la EC2: instalar Docker, subir `infra/docker-compose.yml` + `.env`, `docker compose up -d`.
-4. Configurar credenciales en n8n (rol IAM ya disponible; token Grafana en credential store).
-5. Importar `n8n/workflows/*.json`, ejecutar y validar llegada de métricas a Grafana.
-6. Importar dashboard y alerta desde `grafana/`.
+3. En la EC2: instalar Docker (+ swap), subir `infra/docker-compose.yml` + `.env`,
+   `docker compose up -d` (levanta `postgres`, luego `n8n` y `grafana`).
+4. Crear tabla `metrics` en Postgres; provisionar datasource Postgres + dashboard en Grafana (vía API/provisioning) y generar service-account token.
+5. Construir el workflow n8n (CloudWatch → transformar → INSERT en `metrics`), ejecutar y validar.
+6. Verificar que el dashboard de Grafana muestra las métricas y configurar la alerta.
 
 **Rollback:** `scripts/aws/teardown.sh --yes` elimina todos los recursos por tag; en EC2,
 `docker compose down` detiene el stack sin perder el volumen.
@@ -91,4 +116,4 @@ Despliegue incremental (sin estado previo que migrar):
 
 - ¿Métrica de memoria del EC2 vía CloudWatch Agent (requiere instalarlo) o solo métricas nativas
   (CPU, red, disco) en el MVP? Decisión tentativa: empezar con métricas nativas; memoria vía CloudWatch Agent como mejora.
-- ¿Region del stack de Grafana Cloud más cercana para minimizar latencia de remote write? Se define al dar de alta la cuenta.
+- ¿Conviene un `pg_dump` programado (cron/n8n) para respaldar la tabla `metrics` y la BD de n8n? Evaluar tras el MVP.

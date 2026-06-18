@@ -52,6 +52,7 @@ id_rsa*
 **/.aws/
 **/aws-credentials*
 **/*credentials*.json
+!**/credentials.example.json
 # Tokens y secretos de n8n / Grafana / OpenAI
 **/n8n-secrets*
 **/grafana-token*

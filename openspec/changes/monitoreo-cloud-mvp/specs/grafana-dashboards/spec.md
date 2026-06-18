@@ -1,10 +1,12 @@
 ## ADDED Requirements
 
-### Requirement: Dashboard de observabilidad del EC2
+### Requirement: Dashboard de observabilidad
 
-El sistema SHALL proveer un dashboard en Grafana Cloud con, como mínimo, paneles de uso de CPU y de
-memoria del EC2 alimentados por las métricas del pipeline. El dashboard SHALL versionarse como código
-(JSON/IaC) en `grafana/` para ser reproducible.
+El sistema SHALL proveer un dashboard en **Grafana self-hosted** (contenedor) alimentado desde el
+**datasource PostgreSQL** (tabla `metrics`), con paneles de: **invocaciones**, **errores** y **duración**
+por función Lambda (serie por `instance_id`) y **objetos en S3** por bucket; ampliable a EC2 y otros.
+El dashboard SHALL versionarse como código (JSON) en `grafana/` para ser reproducible. El acceso a Grafana
+SHALL restringirse a la IP del operador (security group en AWS, o solo `localhost` en modo local).
 
 #### Scenario: Paneles con datos
 
@@ -28,13 +30,13 @@ CloudWatch cuando esas métricas estén disponibles en el pipeline.
 
 ### Requirement: Alerta básica configurada
 
-El sistema SHALL definir al menos una alerta en Grafana Cloud (p. ej. CPU alta sostenida) con notificación
+El sistema SHALL definir al menos una alerta en Grafana (p. ej. CPU alta sostenida) con notificación
 por email o webhook, y MUST documentar el umbral y el canal de notificación.
 
 #### Scenario: Disparo de alerta
 
 - **WHEN** una métrica cruza el umbral configurado durante el periodo definido
-- **THEN** Grafana Cloud envía la notificación por el canal configurado (email/webhook)
+- **THEN** Grafana envía la notificación por el canal configurado (email/webhook)
 
 #### Scenario: Umbral documentado
 

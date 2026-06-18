@@ -7,11 +7,11 @@ schema: spec-driven
 # Sirve para cualquier stack (Python, PHP, React, n8n, etc.).
 # ---------------------------------------------------------------------------
 context: |
-  Stack tecnológico: n8n (self-hosted en EC2 t2.micro, Docker), AWS CloudWatch, AWS Lambda (opcional),
-    Grafana Cloud (free), AWS CLI para despliegue, Docker Compose. Capa AI opcional con OpenAI vía n8n.
-  Arquitectura: pipeline de observabilidad pull-based — CloudWatch -> n8n (ETL de métricas) -> Grafana Cloud.
-  Dominio: monitoreo en tiempo real de infraestructura AWS para portafolio, 100% sobre planes gratuitos.
-  Restricción dura: todo debe mantenerse dentro del AWS Free Tier y Grafana Cloud free; revisar billing semanal.
+  Stack tecnológico: n8n + PostgreSQL + Grafana (todo self-hosted en EC2 t3.micro vía Docker Compose),
+    AWS CloudWatch, AWS Lambda (opcional), AWS CLI para despliegue. Capa AI opcional con OpenAI vía n8n.
+  Arquitectura: pipeline pull-based — CloudWatch -> n8n (ETL) -> PostgreSQL (tabla metrics) -> Grafana.
+  Dominio: monitoreo en tiempo real de infraestructura AWS para portafolio, 100% gratuito.
+  Restricción dura: cómputo dentro del AWS Free Tier y software self-hosted gratuito; revisar billing semanal.
   Idioma: documentación y comentarios en español; identificadores de código según convención del lenguaje.
   Control de versiones: conventional commits.
 
